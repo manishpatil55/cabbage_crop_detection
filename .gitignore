@@ -1,0 +1,49 @@
+# ── Python ────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ── Virtual environments ─────────────────────────────────────
+venv/
+env/
+.venv/
+
+# ── IDE ───────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ── Data files (too large for GitHub) ─────────────────────────
+data/processed/
+data/raw/
+outputs/
+*.npy
+*.npz
+
+# ── Trained models (too large for GitHub — 40MB+) ─────────────
+models/saved/*.pkl
+
+# ── Logs ──────────────────────────────────────────────────────
+*.log
+out.txt
+out_train.txt
+
+# ── Temp files ────────────────────────────────────────────────
+*.tmp
+tmp*
+*.kml.tmp
+
+# ── OS files ──────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Test scripts (experimental, not production) ───────────────
+test_*.py

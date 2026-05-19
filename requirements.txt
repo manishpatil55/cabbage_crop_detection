@@ -1,0 +1,43 @@
+# ============================================================
+# Banana Crop Detection System — Requirements
+# Python >= 3.9
+# ============================================================
+
+# ── Core (always required) ───────────────────────────────────
+numpy==1.26.4
+pandas==2.2.2
+scipy==1.13.0
+scikit-learn==1.4.2
+xgboost==2.0.3
+pyyaml==6.0.1
+geopandas==0.14.3
+shapely==2.0.4
+rasterio==1.3.10
+pyproj==3.6.1
+fiona==1.9.6
+python-dateutil==2.9.0
+tqdm==4.66.4
+joblib==1.4.2
+matplotlib==3.8.4
+
+# ── Satellite data backend — choose ONE ──────────────────────
+
+# OPTION A: Google Earth Engine (free for research)
+# Sign up free: https://earthengine.google.com
+# After sign-up run: earthengine authenticate
+# Set in config.yaml:  data_backend: "gee"
+earthengine-api==0.1.390
+geemap==0.30.3
+
+# OPTION B: Microsoft Planetary Computer (completely free, no account)
+# No sign-up needed. Just install and set data_backend: "planetary_computer"
+# pip install pystac-client stackstac planetary-computer rioxarray
+pystac-client==0.7.6
+stackstac==0.5.1
+planetary-computer==1.0.0
+rioxarray==0.15.5
+
+# OPTION C: Sentinel Hub (free trial, then paid)
+# Sign up: https://www.sentinel-hub.com
+# Set in config.yaml:  data_backend: "sentinel_hub"
+# sentinelhub==3.10.2   # uncomment if using this backend

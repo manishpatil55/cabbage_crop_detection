@@ -1,0 +1,118 @@
+# ============================================================
+# Banana Crop Detection System - Configuration
+# ============================================================
+
+# ---------------------------------------------------------------
+# SATELLITE DATA BACKEND
+# Choose one: "gee" | "planetary_computer" | "sentinel_hub"
+#
+# "gee"                 — Google Earth Engine (free for research)
+#                         Requires: GEE account + project ID
+#                         Sign up free: https://earthengine.google.com
+#
+# "planetary_computer"  — Microsoft Planetary Computer (completely free)
+#                         No account or project ID needed at all.
+#                         Just install: pip install pystac-client stackstac
+#                         This is the best option if you don't have GEE.
+#
+# "sentinel_hub"        — Sentinel Hub on AWS (free trial, then paid)
+#                         Requires: sentinel_hub account + client_id/secret
+# ---------------------------------------------------------------
+data_backend: "gee"   # Using GEE with project: crop-detection-494609
+
+gee:
+  project_id: "crop-detection-494609"  # Your GEE project ID
+  service_account: ""                  # Optional: path to service account JSON
+                                        # Leave empty to use: earthengine authenticate
+
+planetary_computer:
+  # No credentials needed — completely free, no sign-up required
+  # Just set data_backend: "planetary_computer" above
+  # Install deps: pip install pystac-client stackstac planetary-computer
+  subscription_key: ""   # Optional: get free key at planetarycomputer.microsoft.com
+                          # for higher rate limits (not required)
+
+sentinel_hub:
+  # Free trial at: https://www.sentinel-hub.com
+  client_id: ""
+  client_secret: ""
+  instance_id: ""
+
+data:
+  raw_dir: "data/raw"
+  processed_dir: "data/processed"
+  models_dir: "models/saved"
+  output_dir: "outputs"
+  kml_dir: "data/kml"
+
+sentinel2:
+  bands: ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12"]
+  cloud_threshold: 20          # Max cloud cover % for scene selection
+  scale: 10                    # Spatial resolution in meters
+
+sentinel1:
+  bands: ["VV", "VH"]
+  orbit_pass: "DESCENDING"     # ASCENDING or DESCENDING
+  scale: 10
+
+compositing:
+  months_before: 3             # Months before confirmed date to download
+  months_after: 3              # Months after confirmed date to download
+  # Total = 6 monthly composites per plot
+  # Why ±3 months (not ±6 or ±12):
+  #   We only KNOW banana is present on the confirmed date.
+  #   ±3 months = high confidence the crop is still standing.
+  #   Longer windows risk including pre-planting or post-harvest data
+  #   which would confuse the model.
+
+sampling:
+  buffer_m: 750                # Buffer around plot for negative samples (meters)
+  max_pixels_per_plot: 500     # Cap pixels per KML to avoid memory issues
+  negative_ratio: 1.0          # Ratio of negative to positive samples
+  random_seed: 42
+
+features:
+  spectral_indices: ["NDVI", "EVI", "NDWI", "RVI", "LSWI"]
+  temporal_stats:
+    - "min"
+    - "max"
+    - "mean"
+    - "median"
+    - "p10"
+    - "p25"
+    - "p75"
+    - "p90"
+    - "std"
+  phenology:
+    ndvi_threshold: 0.3        # Threshold for growing season detection
+    smooth_window: 3           # Savitzky-Golay smoothing window
+
+models:
+  random_forest:
+    n_estimators: [100, 200, 300, 500]
+    max_depth: [10, 20, 30, null]
+    min_samples_split: [2, 5, 10]
+    min_samples_leaf: [1, 2, 4]
+    n_iter: 30                 # RandomizedSearchCV iterations
+    cv_folds: 5
+
+  xgboost:
+    learning_rate: [0.01, 0.05, 0.1, 0.2]
+    max_depth: [3, 5, 7, 9]
+    n_estimators: [200, 500, 1000]
+    subsample: [0.6, 0.8, 1.0]
+    colsample_bytree: [0.6, 0.8, 1.0]
+    early_stopping_rounds: 50
+    eval_metric: "aucpr"
+
+  ensemble:
+    meta_model: "logistic"     # "logistic" or "mlp"
+    cv_folds: 5                # Out-of-fold CV for stacking
+
+inference:
+  output_format: "geotiff"
+  probability_threshold: 0.220   # Matches trained optimal threshold (was 0.5 default)
+  min_patch_size_m2: 100         # Minimum contiguous area to keep
+  months_before: 6               # Inference download window (matches predictor.py default)
+  months_after: 6
+  max_kml_size_mb: 10            # Max upload size for API
