@@ -149,15 +149,28 @@ growth assessment because:
 
 ---
 
-## 🌍 India Seasonal Calendar
+## 🌍 Season-Agnostic Design (Any State, Any Time)
 
-| Region | States | Transplant | Harvest |
-|:---|:---|:---|:---|
-| Northern Plains | UP, Bihar, Punjab, Haryana | Sep-Oct | Dec-Feb |
-| Eastern | West Bengal, Odisha, Assam | Oct-Dec | Jan-Mar |
-| Western/Central | Gujarat, MP, Maharashtra | Nov-Dec | Feb-Mar |
-| Southern | Karnataka, Tamil Nadu | Jun-Nov | Sep-Apr |
-| Hills | Himachal, Uttarakhand, NE | Apr-Sep | Jul-Nov |
+This model does **NOT** depend on knowing the planting season or region. Here's why:
+
+**The Problem with Seasonal Calendars:**
+- India has 5+ agro-climatic zones — cabbage is grown year-round in hill stations
+- Farmers don't follow textbook calendars — market demand, irrigation availability, polyhouse/polytunnel farming, and climate variability shift planting dates unpredictably
+- A fixed calendar would make the model fragile and lock it to specific regions
+
+**How This Model Works Instead:**
+
+The user provides a single **`crop_date`** — the date they confirmed cabbage is present in the field. The system downloads ±3 months of satellite data centred on that date and extracts **shape-based features**:
+
+| Feature | What It Measures | Why It's Season-Independent |
+|:---|:---|:---|
+| `greenup_rate` | Speed of leaf expansion | Same slope whether planted in April or October |
+| `harvest_drop` | Sharp NDVI decline at harvest | Cabbage is cut, not senesced — unique signature |
+| `heading_duration` | How long the head formed | 60-120 days regardless of season |
+| `AUC` | Total greenness over time | Shape of curve, not calendar position |
+| `plateau_stability` | Steadiness during heading | Low std = healthy head, any month |
+
+**Result:** A cabbage planted in April in Shimla produces the same spectral curve shape as one planted in October in Bihar. The model detects the **shape**, not the month.
 
 ---
 

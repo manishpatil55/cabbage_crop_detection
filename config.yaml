@@ -118,31 +118,23 @@ inference:
   months_after: 3
   max_kml_size_mb: 10
 
-# === Cabbage Seasonal Calendar (India) ===
-# Used to validate anchor dates and adjust temporal windows
-seasonal_calendar:
-  northern_plains:    # UP, Bihar, Punjab, Haryana
-    transplant_start: "September"
-    transplant_end: "October"
-    harvest_start: "December"
-    harvest_end: "February"
-  eastern:            # West Bengal, Odisha, Assam
-    transplant_start: "October"
-    transplant_end: "December"
-    harvest_start: "January"
-    harvest_end: "March"
-  western_central:    # Gujarat, MP, Maharashtra
-    transplant_start: "November"
-    transplant_end: "December"
-    harvest_start: "February"
-    harvest_end: "March"
-  southern:           # Karnataka, Tamil Nadu
-    transplant_start: "June"
-    transplant_end: "November"
-    harvest_start: "September"
-    harvest_end: "April"
-  hills:              # Himachal, Uttarakhand, NE states
-    transplant_start: "April"
-    transplant_end: "September"
-    harvest_start: "July"
-    harvest_end: "November"
+# === Season-Agnostic Design ===
+# This model does NOT depend on knowing the planting season.
+#
+# WHY:
+#   - India has 5+ agro-climatic zones; cabbage is grown year-round in hills
+#   - Farmers don't follow textbook calendars — market demand, irrigation,
+#     polyhouse farming, and climate variability shift planting dates
+#   - Fixing a calendar would make the model fragile and region-locked
+#
+# HOW IT WORKS INSTEAD:
+#   The user provides a single "crop_date" — the date they confirmed
+#   cabbage is present. The system downloads ±3 months of satellite data
+#   centred on that date and extracts SHAPE-BASED features:
+#     - greenup_rate, harvest_drop, heading_duration, AUC, etc.
+#   These features describe the CURVE of the crop cycle, not the calendar
+#   month. A cabbage planted in April in Shimla has the same spectral
+#   shape as one planted in October in Bihar.
+#
+# RESULT: Works any state, any season, any date.
+

@@ -15,7 +15,7 @@ Standard vegetation indices like NDVI rely on Red (Band 4) and Near-Infrared (Ba
 - **CCCI (Canopy Chlorophyll Content Index)**: By normalizing NDRE against NDVI, CCCI acts as a direct proxy for nitrogen uptake and chlorophyll concentration, which peak during the critical heading stage.
 
 ### 1.2 Phenological Lifecycle (BBCH Scale)
-Cabbage is a short-cycle Rabi crop (60-120 days). We modeled our feature extraction specifically on the **BBCH-scale for heading vegetables**:
+Cabbage is a short-cycle crop (60-120 days) grown across multiple seasons in India. We modeled our feature extraction specifically on the **BBCH-scale for heading vegetables**:
 - **BBCH 10-19 (Leaf Development)**: Captured by our `greenup_rate` features (rapid slope in EVI/LSWI).
 - **BBCH 40-49 (Head Formation)**: The most critical stage. Captured by `HeadingPhenologyExtractor` through:
   - `heading_duration`: Consecutive composites where VIs exceed heading thresholds.
@@ -42,6 +42,14 @@ Cabbage fields in India are heavily fragmented (0.1 - 1.0 hectares). Neighboring
 
 ### 2.3 Background Diversity
 - Negative samples (Class 0) are automatically sampled from a buffer ring (250m) around the confirmed fields, forcing the model to learn the specific difference between cabbage and its immediate local competitors (weeds, bare soil, rotation crops) rather than just learning geographical coordinates.
+
+### 2.4 Season-Agnostic Design (Critical)
+The model does **NOT** use a seasonal calendar or assume any fixed planting window. This was a deliberate architectural decision:
+- India has 5+ agro-climatic zones; cabbage is grown Rabi in plains, Kharif in hills, and year-round in some hill stations
+- Farmers shift planting dates based on market prices, irrigation availability, and weather — no fixed calendar applies
+- All temporal features (`greenup_rate`, `harvest_drop`, `heading_duration`, `AUC`) describe the **shape** of the crop growth curve, not the calendar month in which it occurs
+- A cabbage planted in April in Shimla produces the same spectral shape as one planted in October in Bihar
+- The only input is a `crop_date` — the date the user confirmed the crop is present. The system downloads ±3 months of satellite data centred on that date, which is enough to capture the full lifecycle regardless of when the crop was planted
 
 ---
 
