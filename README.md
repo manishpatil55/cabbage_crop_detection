@@ -88,7 +88,6 @@ cabbage_detection/
 ├── features/
 │   ├── spectral_indices.py             # 12 spectral indices (incl. CCCI, NDRE)
 │   ├── temporal_stats.py               # Temporal statistics per band
-│   ├── phenology_features.py           # ⚠️ DEPRECATED — legacy perennial phenology
 │   └── phenology_features_heading.py   # ✅ BBCH heading-vegetable phenology (active)
 ├── models/
 │   ├── base_models.py                  # RF + XGBoost wrappers
@@ -100,7 +99,6 @@ cabbage_detection/
 
 > **Important**: Both `train.py` and `inference/predictor.py` use
 > `HeadingPhenologyExtractor` from `phenology_features_heading.py`.
-> The legacy `phenology_features.py` is deprecated and not used.
 
 ---
 
