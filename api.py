@@ -4,7 +4,7 @@ Cabbage Detection API
 FastAPI server with Swagger UI for cabbage crop detection.
 
 Run:  python api.py
-Swagger UI: http://localhost:8008/docs
+Swagger UI: http://localhost:8009/docs
 """
 
 import logging

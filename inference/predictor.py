@@ -200,8 +200,8 @@ class CabbagePredictor:
         output_dir: str = "outputs",
         scale: int = 10,
         probability_threshold: Optional[float] = None,
-        months_before: int = 2,
-        months_after: int = 2,
+        months_before: int = 3,
+        months_after: int = 3,
     ) -> Dict:
         """
         Detect cabbage crop in a KML polygon on a specific confirmed date.
@@ -211,14 +211,14 @@ class CabbagePredictor:
         kml_path    : path to .kml or .kmz file
         crop_date   : "YYYY-MM-DD" â€” the date the crop was confirmed present.
                       This is the ONLY date you need to provide.
-                      The system automatically downloads Â±2 months of satellite
+                      The system automatically downloads ±3 months of satellite
                       data centred on this date.
         target_state: Indian state name (optional â€” used for logging only)
         output_dir  : folder where GeoTIFF outputs are saved
         scale       : pixel resolution in metres (default 10 = Sentinel native)
         probability_threshold : override the 0.5 default if needed
-        months_before : months of history before crop_date (default 2)
-        months_after  : months of future after crop_date (default 2)
+        months_before : months of history before crop_date (default 3)
+        months_after  : months of future after crop_date (default 3)
 
         Returns
         -------

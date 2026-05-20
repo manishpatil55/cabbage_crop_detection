@@ -6,7 +6,7 @@ This document outlines the deep scientific research, architectural decisions, an
 
 ## 1. Remote Sensing Science for Cabbage
 
-Cabbage (*Brassica oleracea var. capitata*) presents unique challenges for satellite-based remote sensing compared to perennial crops (like bananas) or tall row crops (like maize).
+Cabbage (*Brassica oleracea var. capitata*) presents unique challenges for satellite-based remote sensing compared to tall row crops (like maize) or tree crops.
 
 ### 1.1 The Canopy Problem & Red-Edge Advantage
 Standard vegetation indices like NDVI rely on Red (Band 4) and Near-Infrared (Band 8). However, cabbage forms a very dense, low-to-the-ground rosette that rapidly transitions into a compact, multi-layered spherical head. 

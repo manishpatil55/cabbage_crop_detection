@@ -21,7 +21,7 @@ KML Polygon → GEE Download → Spectral Indices → Temporal Stats → Heading
 - **Satellite Fusion**: Sentinel-1 SAR (cloud-free radar) + Sentinel-2 optical (10m resolution)
 - **12 Spectral Indices**: NDVI, EVI, NDWI, LSWI, SAVI, MSAVI, NBR, NDRE, **CCCI**, RVI, RFDI, CR
 - **BBCH Heading Phenology**: Features tailored for heading vegetables (Stage 4: head formation)
-- **Monthly Compositing**: ±2 month window captures cabbage's rapid 60-120 day lifecycle
+- **Monthly Compositing**: ±3 month window captures cabbage's full lifecycle + cloud buffer
 - **State-Aware Calendar**: India-specific seasonal windows for 5 agro-climatic zones
 - **Spatial Cross-Validation**: GroupShuffleSplit by plot_id prevents spatial data leakage
 
@@ -61,7 +61,7 @@ python train.py
 ```bash
 python api.py
 ```
-Then open **http://localhost:8008/docs** for Swagger UI.
+Then open **http://localhost:8009/docs** for Swagger UI.
 
 ### 6. Make Predictions
 Upload a KML file to the `/detect` endpoint with a crop date.
@@ -72,11 +72,12 @@ Upload a KML file to the `/detect` endpoint with a crop date.
 
 ```
 cabbage_detection/
-├── api.py                              # FastAPI REST server
+├── api.py                              # FastAPI REST server (port 8009)
 ├── train.py                            # Training pipeline (v2, production-optimised)
 ├── config.yaml                         # Configuration (cabbage-specific)
 ├── requirements.txt                    # Python dependencies
 ├── utils.py                            # Shared utilities
+├── ARCHITECTURE_ANALYSIS.md            # Deep scientific & architectural analysis
 ├── data/
 │   ├── gee_downloader.py               # Multi-backend satellite downloader
 │   │                                     (GEE / Planetary Computer / Sentinel Hub)
@@ -87,8 +88,8 @@ cabbage_detection/
 │       └── non_cabbage/               # Non-cabbage KML training data (50 plots)
 ├── features/
 │   ├── spectral_indices.py             # 12 spectral indices (incl. CCCI, NDRE)
-│   ├── temporal_stats.py               # Temporal statistics per band
-│   └── phenology_features_heading.py   # ✅ BBCH heading-vegetable phenology (active)
+│   ├── temporal_stats.py               # Temporal statistics per band (11 stats)
+│   └── phenology_features_heading.py   # BBCH heading-vegetable phenology (cabbage)
 ├── models/
 │   ├── base_models.py                  # RF + XGBoost wrappers
 │   └── saved/                          # Trained model artifacts
@@ -193,10 +194,10 @@ Key settings in `config.yaml`:
 | Setting | Value | Why |
 |:---|:---|:---|
 | `composite_frequency` | monthly | Monthly composites for 60-120 day crop |
-| `months_before/after` | 2 | ±2 months captures full lifecycle |
+| `months_before/after` | 3 | ±3 months captures full lifecycle + cloud buffer for pan-India |
 | `buffer_m` | 250 | Sized for fragmented 0.1-1 ha fields |
 | `minimum_field_area_ha` | 0.10 | 10 Sentinel pixels minimum |
-| `probability_threshold` | 0.200 | Calibrated after training |
+| `probability_threshold` | 0.200 | Calibrated after training (Youden/F1 optimal) |
 | `key_indices` | NDVI, NDRE, EVI, LSWI, CCCI | Red-edge emphasis for heading vegetables |
 | `function_set` | heading_vegetable | BBCH-scale phenology features |
 
@@ -235,7 +236,7 @@ The pipeline ensures feature consistency between training and inference:
 |:---|:---|:---|
 | Phenology extractor | `HeadingPhenologyExtractor` | `HeadingPhenologyExtractor` ✅ |
 | Spectral indices | 12 indices (NDVI → CR) | Same 12 indices ✅ |
-| Window | ±2 months (from config) | ±2 months (from config) ✅ |
+| Window | ±3 months (from config) | ±3 months (from config) ✅ |
 | Scaler | Fit on training data | Applied from saved scaler ✅ |
 | NaN imputation | Training medians | Same training medians ✅ |
 
@@ -243,8 +244,8 @@ The pipeline ensures feature consistency between training and inference:
 
 ```bash
 python api.py
-# → Swagger UI: http://localhost:8008/docs
-# → Health check: http://localhost:8008/health
+# → Swagger UI: http://localhost:8009/docs
+# → Health check: http://localhost:8009/health
 ```
 
 ### CLI Inference
