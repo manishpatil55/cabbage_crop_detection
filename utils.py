@@ -1,7 +1,7 @@
 """
 utils.py
 ========
-Shared utility functions used across the banana detection pipeline.
+Shared utility functions used across the cabbage detection pipeline.
 """
 
 from __future__ import annotations

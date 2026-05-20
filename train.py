@@ -1,7 +1,7 @@
 """
 train.py  (v2 - Production-Optimised)
 ======================================
-Banana crop detection training pipeline with 5 accuracy optimizations:
+Cabbage crop detection training pipeline with 5 accuracy optimizations:
 
   1. Feature selection    - remove noisy/high-NaN features
   2. Optimal threshold    - find best cutoff from ROC curve
@@ -52,11 +52,11 @@ from data.kml_parser import KMLParser
 from data.sample_generator import SampleGenerator
 from features.spectral_indices import SpectralIndexCalculator
 from features.temporal_stats import TemporalStatsExtractor
-from features.phenology_features import PhenologyExtractor
+from features.phenology_features_heading import HeadingPhenologyExtractor
 
 CONFIG = "config.yaml"
-BANANA_DIR     = "data/kml/banana"
-NON_BANANA_DIR = "data/kml/non_banana"
+CABBAGE_DIR     = "data/kml/cabbage"
+NON_CABBAGE_DIR = "data/kml/non_cabbage"
 PROCESSED_DIR  = "data/processed"
 MODEL_DIR      = "models/saved"
 
@@ -88,7 +88,7 @@ def _build_features(df_wide):
     stats = TemporalStatsExtractor(CONFIG)
     df_stats = stats.compute(df_wide, time_tags=time_tags)
 
-    pheno = PhenologyExtractor(CONFIG)
+    pheno = HeadingPhenologyExtractor(CONFIG)
     df_pheno = pheno.compute(df_wide, time_tags=time_tags)
 
     meta_cols = [c for c in ["longitude", "latitude", "state", "label", "plot_id",
@@ -232,7 +232,7 @@ def main():
         logger.warning(f"GEE init failed: {e}. Will use cached data if available.")
 
     logger.info("=" * 60)
-    logger.info("BANANA CROP DETECTION - TRAINING PIPELINE v2")
+    logger.info("CABBAGE CROP DETECTION - TRAINING PIPELINE v2")
     logger.info("  Optimizations: Feature Selection + Threshold Tuning")
     logger.info("               + Stacking Ensemble + Calibration")
     logger.info("=" * 60)
@@ -241,11 +241,11 @@ def main():
     logger.info("\n[STEP 1] Parsing KML files...")
     parser = KMLParser()
 
-    banana_gdf = parser.parse_directory(BANANA_DIR)
-    logger.info(f"  Banana plots   : {len(banana_gdf)}")
+    cabbage_gdf = parser.parse_directory(CABBAGE_DIR)
+    logger.info(f"  Cabbage plots   : {len(cabbage_gdf)}")
 
-    neg_gdf = parser.parse_directory(NON_BANANA_DIR, label=0)
-    logger.info(f"  Non-banana plots: {len(neg_gdf)}")
+    neg_gdf = parser.parse_directory(NON_CABBAGE_DIR, label=0)
+    logger.info(f"  Non-cabbage plots: {len(neg_gdf)}")
 
     # ── Step 2: Download / load satellite data ────────────────────────
     logger.info("\n[STEP 2] Loading satellite data...")
@@ -259,11 +259,11 @@ def main():
     else:
         logger.info("  Downloading from GEE (this takes ~8 min)...")
         gen = SampleGenerator(config_path=CONFIG)
-        df_wide, _, meta_df = gen.generate(gdf=banana_gdf, external_neg_gdf=neg_gdf)
+        df_wide, _, meta_df = gen.generate(gdf=cabbage_gdf, external_neg_gdf=neg_gdf)
         gen.save(df_wide, np.zeros((1, 1, 1)), meta_df, out_dir=PROCESSED_DIR)
 
     labels = meta_df["label"].values
-    logger.info(f"  Pixels: {len(labels)} | Banana: {(labels==1).sum()} | Non-banana: {(labels==0).sum()}")
+    logger.info(f"  Pixels: {len(labels)} | Cabbage: {(labels==1).sum()} | Non-cabbage: {(labels==0).sum()}")
 
     # ── Step 3: Feature engineering ───────────────────────────────────
     logger.info("\n[STEP 3] Computing features...")
@@ -408,7 +408,7 @@ def main():
     logger.info(f"     F1-score: {final_f1:.4f}  (was {best['f1']:.4f} at 0.5)")
 
     logger.info("\n" + classification_report(
-        y_val, best_preds, target_names=["Non-Banana", "Banana"], zero_division=0
+        y_val, best_preds, target_names=["Non-Cabbage", "Cabbage"], zero_division=0
     ))
 
     # ── Step 9: Save everything ───────────────────────────────────────

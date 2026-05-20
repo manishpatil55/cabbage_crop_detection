@@ -1,7 +1,7 @@
 """
-Banana Detection API
+Cabbage Detection API
 ====================
-FastAPI server with Swagger UI for banana crop detection.
+FastAPI server with Swagger UI for cabbage crop detection.
 
 Run:  python api.py
 Swagger UI: http://localhost:8008/docs
@@ -31,22 +31,22 @@ logger = logging.getLogger(__name__)
 
 # ── App setup ──────────────────────────────────────────────────────────────
 app = FastAPI(
-    title="Banana Crop Detection API",
+    title="Cabbage Crop Detection API",
     description="""
-## Pan-India Banana Detection from Satellite Imagery
+## Pan-India Cabbage Detection from Satellite Imagery
 
 Upload a KML file with a farm boundary polygon and a date when the crop was observed.
 The API will:
 1. Download Sentinel-1 (SAR) + Sentinel-2 (optical) data from Google Earth Engine
-2. Compute spectral indices (NDVI, EVI, LSWI, etc.)
-3. Extract temporal + phenological features
+2. Compute spectral indices (NDVI, NDRE, CCCI, EVI, LSWI, etc.)
+3. Extract temporal + heading phenological features
 4. Run the trained ML model (XGBoost / RF / Stacking ensemble)
-5. Return probability of banana presence
+5. Return probability of cabbage presence
 
 ### How it works
 - **Input**: KML file + observation date
-- **Output**: Banana probability (0-100%), classification, per-pixel stats
-- **Model**: Trained on 50+ banana farms across Maharashtra & Andhra Pradesh
+- **Output**: Cabbage probability (0-100%), classification, per-pixel stats
+- **Model**: Trained on cabbage farms across India (Rabi season)
 - **Satellites**: Sentinel-1 (radar, cloud-free) + Sentinel-2 (optical)
     """,
     version="2.0.0",
@@ -67,10 +67,10 @@ app.add_middleware(
 class DetectionResult(BaseModel):
     # ── 1. VERDICT (top — what testers look at first) ──────────────
     verdict: str = Field(description="Human-readable verdict with confidence level")
-    classification: str = Field(description="'BANANA' or 'NON-BANANA'")
-    label: int = Field(description="1 = Banana, 0 = Non-Banana")
+    classification: str = Field(description="'CABBAGE' or 'NON-CABBAGE'")
+    label: int = Field(description="1 = Cabbage, 0 = Non-Cabbage")
     confidence: str = Field(description="Confidence level: HIGH / MODERATE / LOW")
-    banana_percentage: float = Field(description="% of area classified as banana")
+    cabbage_percentage: float = Field(description="% of area classified as cabbage")
 
     # ── 2. LOCATION INFO ──────────────────────────────────────────
     area_hectares: Optional[float] = Field(default=None, description="Total farm area in hectares")
@@ -81,11 +81,11 @@ class DetectionResult(BaseModel):
 
     # ── 3. PIXEL ANALYSIS ─────────────────────────────────────────
     total_pixels: int = Field(description="Total pixels analysed")
-    banana_pixels: int = Field(description="Pixels classified as banana")
-    non_banana_pixels: int = Field(description="Pixels classified as non-banana")
-    mean_probability: float = Field(description="Mean banana probability (0-1)")
-    max_probability: float = Field(description="Max banana probability")
-    min_probability: float = Field(description="Min banana probability")
+    cabbage_pixels: int = Field(description="Pixels classified as cabbage")
+    non_cabbage_pixels: int = Field(description="Pixels classified as non-cabbage")
+    mean_probability: float = Field(description="Mean cabbage probability (0-1)")
+    max_probability: float = Field(description="Max cabbage probability")
+    min_probability: float = Field(description="Min cabbage probability")
 
     # ── 4. CLOUD COVER & DATA QUALITY ─────────────────────────────
     cloud_free_percentage: Optional[float] = Field(default=None, description="% of months with clear optical data (0-100)")
@@ -166,7 +166,7 @@ def predict_from_kml(kml_path: str, crop_date: str) -> dict:
     from data.sample_generator import SampleGenerator
     from features.spectral_indices import SpectralIndexCalculator
     from features.temporal_stats import TemporalStatsExtractor
-    from features.phenology_features import PhenologyExtractor
+    from features.phenology_features_heading import HeadingPhenologyExtractor
 
     if model_data is None:
         raise HTTPException(status_code=503, detail="Model not loaded. Run train.py first.")
@@ -193,13 +193,18 @@ def predict_from_kml(kml_path: str, crop_date: str) -> dict:
     if detected_state in (None, "Unknown", ""):
         detected_state = None
 
-    # Compute satellite window from the crop date
+    # Compute satellite window from the crop date (read from config for consistency)
+    import yaml as _yaml
+    _cfg = _yaml.safe_load(open("config.yaml"))
+    _months_before = _cfg.get("compositing", {}).get("months_before", 2)
+    _months_after = _cfg.get("compositing", {}).get("months_after", 2)
+
     from dateutil.relativedelta import relativedelta
     from datetime import datetime as _dt
     try:
         cd = _dt.strptime(crop_date, "%Y-%m-%d")
-        win_start = (cd - relativedelta(months=3)).strftime("%Y-%m-%d")
-        win_end = (cd + relativedelta(months=3)).strftime("%Y-%m-%d")
+        win_start = (cd - relativedelta(months=_months_before)).strftime("%Y-%m-%d")
+        win_end = (cd + relativedelta(months=_months_after)).strftime("%Y-%m-%d")
         sat_window = f"{win_start} to {win_end}"
     except Exception:
         sat_window = None
@@ -259,7 +264,7 @@ def predict_from_kml(kml_path: str, crop_date: str) -> dict:
     stats_ext = TemporalStatsExtractor("config.yaml")
     df_stats = stats_ext.compute(df_wide, time_tags=time_tags)
 
-    pheno_ext = PhenologyExtractor("config.yaml")
+    pheno_ext = HeadingPhenologyExtractor("config.yaml")
     df_pheno = pheno_ext.compute(df_wide, time_tags=time_tags)
 
     meta_cols_list = ["longitude", "latitude", "state", "label", "plot_id",
@@ -292,48 +297,48 @@ def predict_from_kml(kml_path: str, crop_date: str) -> dict:
     logger.info("[5/5] Running inference...")
     probs = model.predict_proba(arr)[:, 1]
 
-    banana_mask = probs >= threshold
-    banana_count = int(banana_mask.sum())
+    cabbage_mask = probs >= threshold
+    cabbage_count = int(cabbage_mask.sum())
     total = len(probs)
-    banana_pct = round((banana_count / total * 100) if total > 0 else 0, 1)
+    cabbage_pct = round((cabbage_count / total * 100) if total > 0 else 0, 1)
 
     # Classification, label, confidence, verdict
-    if banana_pct >= 70:
-        classification = "BANANA"
+    if cabbage_pct >= 70:
+        classification = "CABBAGE"
         label = 1
         confidence = "HIGH"
         verdict = (
-            f"✅ HIGH CONFIDENCE — Banana plantation detected. "
-            f"{banana_pct}% of pixels ({banana_count}/{total}) classified as banana. "
+            f"✅ HIGH CONFIDENCE — Cabbage crop detected. "
+            f"{cabbage_pct}% of pixels ({cabbage_count}/{total}) classified as cabbage. "
             f"Mean probability: {probs.mean():.1%}. "
             f"Area: {total_area:.2f} hectares."
         )
-    elif banana_pct >= 40:
-        classification = "BANANA"
+    elif cabbage_pct >= 40:
+        classification = "CABBAGE"
         label = 1
         confidence = "MODERATE"
         verdict = (
-            f"⚠️ MODERATE CONFIDENCE — Partial banana presence detected. "
-            f"{banana_pct}% of pixels ({banana_count}/{total}) show banana signatures. "
-            f"Could be mixed cropping or young plantation."
+            f"⚠️ MODERATE CONFIDENCE — Partial cabbage presence detected. "
+            f"{cabbage_pct}% of pixels ({cabbage_count}/{total}) show cabbage signatures. "
+            f"Could be mixed cropping or early-stage growth."
         )
-    elif banana_pct >= 10:
-        classification = "NON-BANANA"
+    elif cabbage_pct >= 10:
+        classification = "NON-CABBAGE"
         label = 0
         confidence = "LOW"
         verdict = (
-            f"❌ LOW CONFIDENCE — Unlikely banana. "
-            f"Only {banana_pct}% of pixels ({banana_count}/{total}) show weak banana signatures. "
-            f"This area is most likely NOT a banana plantation."
+            f"❌ LOW CONFIDENCE — Unlikely cabbage. "
+            f"Only {cabbage_pct}% of pixels ({cabbage_count}/{total}) show weak cabbage signatures. "
+            f"This area is most likely NOT a cabbage field."
         )
     else:
-        classification = "NON-BANANA"
+        classification = "NON-CABBAGE"
         label = 0
         confidence = "HIGH"
         verdict = (
-            f"❌ NOT BANANA — No banana crop detected. "
-            f"Only {banana_pct}% of pixels ({banana_count}/{total}) matched. "
-            f"This area does not contain banana plantations."
+            f"❌ NOT CABBAGE — No cabbage crop detected. "
+            f"Only {cabbage_pct}% of pixels ({cabbage_count}/{total}) matched. "
+            f"This area does not contain cabbage crops."
         )
 
     return {
@@ -342,7 +347,7 @@ def predict_from_kml(kml_path: str, crop_date: str) -> dict:
         "classification": classification,
         "label": label,
         "confidence": confidence,
-        "banana_percentage": banana_pct,
+        "cabbage_percentage": cabbage_pct,
 
         # 2. LOCATION
         "area_hectares": round(total_area, 2) if total_area else None,
@@ -358,8 +363,8 @@ def predict_from_kml(kml_path: str, crop_date: str) -> dict:
 
         # 3. PIXEL ANALYSIS
         "total_pixels": total,
-        "banana_pixels": banana_count,
-        "non_banana_pixels": total - banana_count,
+        "cabbage_pixels": cabbage_count,
+        "non_cabbage_pixels": total - cabbage_count,
         "mean_probability": round(float(probs.mean()), 4),
         "max_probability": round(float(probs.max()), 4),
         "min_probability": round(float(probs.min()), 4),
@@ -409,25 +414,25 @@ def health_check():
 
 
 @app.post("/detect", response_model=DetectionResult, tags=["Detection"])
-async def detect_banana(
+async def detect_cabbage(
     kml_file: UploadFile = File(..., description="KML file with farm boundary polygon"),
-    crop_date: str = Form(..., description="Date when banana presence is to be checked (YYYY-MM-DD format)"),
+    crop_date: str = Form(..., description="Date when cabbage presence is to be checked (YYYY-MM-DD format)"),
 ):
     """
-    ## Detect Banana Crop
+    ## Detect Cabbage Crop
 
     Upload a KML file containing a farm boundary polygon and specify the date
-    you want to check for banana presence.
+    you want to check for cabbage presence.
 
-    The API will automatically download satellite data, compute vegetation indices, 
-    and classify the area as banana or non-banana using our stacked ensemble.
+    The API will automatically download satellite data, compute vegetation indices,
+    and classify the area as cabbage or non-cabbage using our stacked ensemble.
 
     ### Parameters:
     - **kml_file**: A `.kml` file with one or more polygon boundaries
     - **crop_date**: Date in `YYYY-MM-DD` format
 
     ### Returns:
-    - Banana probability per pixel
+    - Cabbage probability per pixel
     - Overall classification
     - Human-readable verdict
     """
@@ -465,8 +470,8 @@ async def detect_banana(
 
 if __name__ == "__main__":
     print("=" * 50)
-    print("  Banana Detection API")
-    print("  Swagger UI: http://localhost:8008/docs")
+    print("  Cabbage Detection API")
+    print("  Swagger UI: http://localhost:8009/docs")
     print("=" * 50)
-    uvicorn.run(app, host="0.0.0.0", port=8008, log_level="info")
+    uvicorn.run(app, host="0.0.0.0", port=8009, log_level="info")
 

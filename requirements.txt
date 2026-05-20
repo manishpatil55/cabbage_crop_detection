@@ -1,5 +1,5 @@
 # ============================================================
-# Banana Crop Detection System — Requirements
+# Cabbage Crop Detection System — Requirements
 # Python >= 3.9
 # ============================================================
 

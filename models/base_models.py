@@ -172,7 +172,7 @@ class RandomForestModel:
         return self
 
     def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
-        """Return banana class probability for each pixel."""
+        """Return cabbage class probability for each pixel."""
         X_arr = self._preprocess(X)
         return self.model.predict_proba(X_arr)[:, 1]
 
@@ -191,7 +191,7 @@ class RandomForestModel:
         preds = self.predict_proba(X)
         binary = (preds >= 0.5).astype(int)
         auc = roc_auc_score(y, preds)
-        report = classification_report(y, binary, target_names=["Non-Banana", "Banana"])
+        report = classification_report(y, binary, target_names=["Non-Cabbage", "Cabbage"])
         logger.info(f"RF {split} AUC-ROC: {auc:.4f}\n{report}")
 
     def save(self, path: str):
@@ -342,7 +342,7 @@ class XGBoostModel:
         preds = self.predict_proba(X)
         binary = (preds >= 0.5).astype(int)
         auc = roc_auc_score(y, preds)
-        report = classification_report(y, binary, target_names=["Non-Banana", "Banana"])
+        report = classification_report(y, binary, target_names=["Non-Cabbage", "Cabbage"])
         logger.info(f"XGB {split} AUC-ROC: {auc:.4f}\n{report}")
 
     def save(self, path: str):

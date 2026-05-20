@@ -1,5 +1,5 @@
 # ============================================================
-# Banana Crop Detection System - Configuration
+# Cabbage Crop Detection System - Configuration
 # ============================================================
 
 # ---------------------------------------------------------------
@@ -18,19 +18,14 @@
 # "sentinel_hub"        — Sentinel Hub on AWS (free trial, then paid)
 #                         Requires: sentinel_hub account + client_id/secret
 # ---------------------------------------------------------------
-data_backend: "gee"   # Using GEE with project: crop-detection-494609
+data_backend: "gee"
 
 gee:
-  project_id: "crop-detection-494609"  # Your GEE project ID
-  service_account: ""                  # Optional: path to service account JSON
-                                        # Leave empty to use: earthengine authenticate
+  project_id: "crop-detection-494609"
+  service_account: ""
 
 planetary_computer:
-  # No credentials needed — completely free, no sign-up required
-  # Just set data_backend: "planetary_computer" above
-  # Install deps: pip install pystac-client stackstac planetary-computer
-  subscription_key: ""   # Optional: get free key at planetarycomputer.microsoft.com
-                          # for higher rate limits (not required)
+  subscription_key: ""
 
 sentinel_hub:
   # Free trial at: https://www.sentinel-hub.com
@@ -47,32 +42,34 @@ data:
 
 sentinel2:
   bands: ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12"]
-  cloud_threshold: 20          # Max cloud cover % for scene selection
-  scale: 10                    # Spatial resolution in meters
+  cloud_threshold: 20
+  scale: 10
 
 sentinel1:
   bands: ["VV", "VH"]
-  orbit_pass: "DESCENDING"     # ASCENDING or DESCENDING
+  orbit_pass: "DESCENDING"
   scale: 10
 
 compositing:
-  months_before: 3             # Months before confirmed date to download
-  months_after: 3              # Months after confirmed date to download
-  # Total = 6 monthly composites per plot
-  # Why ±3 months (not ±6 or ±12):
-  #   We only KNOW banana is present on the confirmed date.
-  #   ±3 months = high confidence the crop is still standing.
-  #   Longer windows risk including pre-planting or post-harvest data
-  #   which would confuse the model.
+  months_before: 3               # ±3 months (6 months total) — captures full cycle + cloud buffer
+  months_after: 3
+  composite_frequency: "monthly"   # Monthly composites (generates ~7 observations total)
+  # Why ±3 months for pan-India:
+  #   Cabbage completes its lifecycle in 60-120 days, but in monsoon-heavy
+  #   regions (NE India, hills) 2-3 months of optical data may be cloud-free.
+  #   ±3 months ensures at least 4-5 usable composites even in cloudy zones.
+  #   SAR (Sentinel-1) fills gaps in cloud-affected months.
+  #   This window works for ALL Indian seasons: Rabi, Kharif, and year-round hills.
 
 sampling:
-  buffer_m: 750                # Buffer around plot for negative samples (meters)
-  max_pixels_per_plot: 500     # Cap pixels per KML to avoid memory issues
-  negative_ratio: 1.0          # Ratio of negative to positive samples
+  buffer_m: 250                  # Buffer for fragmented cabbage fields (0.1-1 ha typical)
+  max_pixels_per_plot: 500
+  negative_ratio: 1.0
   random_seed: 42
+  minimum_field_area_ha: 0.10    # 10 Sentinel pixels minimum (cabbage fields are small)
 
 features:
-  spectral_indices: ["NDVI", "EVI", "NDWI", "RVI", "LSWI"]
+  spectral_indices: ["NDVI", "EVI", "NDWI", "RVI", "LSWI", "NDRE", "CCCI"]
   temporal_stats:
     - "min"
     - "max"
@@ -83,9 +80,13 @@ features:
     - "p75"
     - "p90"
     - "std"
+    - "range"
+    - "cv"
   phenology:
-    ndvi_threshold: 0.3        # Threshold for growing season detection
-    smooth_window: 3           # Savitzky-Golay smoothing window
+    ndvi_threshold: 0.3
+    smooth_window: 3
+    function_set: "heading_vegetable"   # BBCH-scale features for heading vegetables (cabbage)
+    key_indices: ["NDVI", "NDRE", "EVI", "LSWI", "CCCI"]
 
 models:
   random_forest:
@@ -93,7 +94,7 @@ models:
     max_depth: [10, 20, 30, null]
     min_samples_split: [2, 5, 10]
     min_samples_leaf: [1, 2, 4]
-    n_iter: 30                 # RandomizedSearchCV iterations
+    n_iter: 30
     cv_folds: 5
 
   xgboost:
@@ -106,13 +107,42 @@ models:
     eval_metric: "aucpr"
 
   ensemble:
-    meta_model: "logistic"     # "logistic" or "mlp"
-    cv_folds: 5                # Out-of-fold CV for stacking
+    meta_model: "logistic"
+    cv_folds: 5
 
 inference:
   output_format: "geotiff"
-  probability_threshold: 0.220   # Matches trained optimal threshold (was 0.5 default)
-  min_patch_size_m2: 100         # Minimum contiguous area to keep
-  months_before: 6               # Inference download window (matches predictor.py default)
-  months_after: 6
-  max_kml_size_mb: 10            # Max upload size for API
+  probability_threshold: 0.200   # Calibrated after training (Youden/F1 optimal)
+  min_patch_size_m2: 100
+  months_before: 3               # ±3 months for inference (handles cloud gaps across India)
+  months_after: 3
+  max_kml_size_mb: 10
+
+# === Cabbage Seasonal Calendar (India) ===
+# Used to validate anchor dates and adjust temporal windows
+seasonal_calendar:
+  northern_plains:    # UP, Bihar, Punjab, Haryana
+    transplant_start: "September"
+    transplant_end: "October"
+    harvest_start: "December"
+    harvest_end: "February"
+  eastern:            # West Bengal, Odisha, Assam
+    transplant_start: "October"
+    transplant_end: "December"
+    harvest_start: "January"
+    harvest_end: "March"
+  western_central:    # Gujarat, MP, Maharashtra
+    transplant_start: "November"
+    transplant_end: "December"
+    harvest_start: "February"
+    harvest_end: "March"
+  southern:           # Karnataka, Tamil Nadu
+    transplant_start: "June"
+    transplant_end: "November"
+    harvest_start: "September"
+    harvest_end: "April"
+  hills:              # Himachal, Uttarakhand, NE states
+    transplant_start: "April"
+    transplant_end: "September"
+    harvest_start: "July"
+    harvest_end: "November"

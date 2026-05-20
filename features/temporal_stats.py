@@ -194,7 +194,7 @@ class TemporalStatsExtractor:
     ) -> pd.DataFrame:
         """
         Compute mean and std separately for monsoon (Jun–Sep) and dry (Oct–May) months.
-        This captures the seasonal phenological contrast that distinguishes banana
+        This captures the seasonal phenological contrast that distinguishes cabbage
         from other crops.
         """
         rows = {}
@@ -236,7 +236,7 @@ class TemporalStatsExtractor:
     ) -> pd.DataFrame:
         """
         Compute year-over-year difference in mean values.
-        Captures perennial crop stability (banana is perennial → low inter-annual change).
+        Captures crop stability (cabbage shows rapid green-up then decline).
         """
         rows = {}
         years = sorted(set(_parse_tag(t)[0] for t in time_tags))
@@ -273,7 +273,7 @@ class TemporalStatsExtractor:
     ) -> pd.DataFrame:
         """
         Compute SAR-optical ratio statistics.
-        VV/NDVI and VH/NDVI ratios help distinguish banana canopy structure
+        VV/NDVI and VH/NDVI ratios help distinguish cabbage canopy structure
         from other vegetation types.
         """
         rows = {}

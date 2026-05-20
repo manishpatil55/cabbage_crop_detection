@@ -1,41 +1,41 @@
 """
 predictor.py
 ============
-End-to-end banana crop detection inference pipeline.
+End-to-end cabbage crop detection inference pipeline.
 
 Design principles
 -----------------
 1. CROP-BASED, NOT SOIL-BASED
-   The model learns banana's temporal spectral signature — the shape of how
-   NDVI/EVI/SAR change across seasons — not absolute reflectance values.
+   The model learns cabbage's temporal spectral signature â€” the shape of how
+   NDVI/EVI/SAR change across seasons â€” not absolute reflectance values.
 
 2. SINGLE-DATE INTERFACE
    Your testing team confirms a crop on a specific date.  You provide:
-       kml_path  — the polygon
-       crop_date — the date the crop was confirmed present
+       kml_path  â€” the polygon
+       crop_date â€” the date the crop was confirmed present
    The system internally computes the optimal GEE download window
-   (crop_date − 6 months → crop_date + 6 months, capped to available data)
+   (crop_date âˆ’ 6 months â†’ crop_date + 6 months, capped to available data)
    and downloads exactly what is needed.  No date range required.
 
 3. AUTOMATIC GENERALISATION
    Works across all of India without any labels from the target region:
    - Temporal statistics (min/max/mean/std of NDVI across months) are
-     region-independent — they describe the *shape* of the crop cycle.
+     region-independent â€” they describe the *shape* of the crop cycle.
    - SAR features (VV, VH, RVI) penetrate clouds and are soil-independent.
    - Phenology features (season length, peak NDVI timing) are invariant.
 
-Usage — testing team workflow
+Usage â€” testing team workflow
 ------------------------------
-    from inference.predictor import BananaPredictor
+    from inference.predictor import CabbagePredictor
 
-    predictor = BananaPredictor()
+    predictor = CabbagePredictor()
 
     result = predictor.predict(
         kml_path="plots/field_42.kml",
         crop_date="2024-08-15",        # date crop was confirmed
     )
 
-    print(f"Is banana: {result['is_banana']}")
+    print(f"Is cabbage: {result['is_cabbage']}")
     print(f"Confidence: {result['confidence']*100:.1f}%")
     print(f"Probability map: {result['probability_map_path']}")
 
@@ -61,25 +61,30 @@ import yaml
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Window computation — the only date logic the user never needs to touch
+# Window computation â€” the only date logic the user never needs to touch
 # ---------------------------------------------------------------------------
 
-def _crop_date_to_window(crop_date: str, months_before: int = 6, months_after: int = 6) -> Tuple[str, str]:
+def _crop_date_to_window(crop_date: str, months_before: int = 3, months_after: int = 3) -> Tuple[str, str]:
     """
     Convert a single confirmed crop date to a GEE download window.
 
-    Why ±6 months?
-    --------------
-    Banana is a perennial crop with a ~12-month growth cycle.  To capture
-    the full phenological signature (green-up, peak, senescence) the model
-    needs at least one complete annual cycle centred on the confirmed date.
-    6 months before + 6 months after = 12 months = one full cycle.
+    Why Â±3 months (default)?
+    ------------------------
+    Cabbage lifecycle is 60-120 days, but India has extreme cloud variability.
+    In monsoon regions (NE, hills) optical data can be missing for 2-3 months.
+    Â±3 months = 6 monthly composites, ensuring at least 4-5 usable observations
+    even in the cloudiest regions.  SAR (Sentinel-1) fills remaining gaps.
+
+    This makes the model work across ALL Indian states and seasons:
+    - Rabi (Oct-Mar): Northern plains, Eastern, Western
+    - Kharif (Jun-Oct): Hills, parts of Southern India
+    - Year-round: Some hill stations, polytunnel cultivation
 
     Parameters
     ----------
-    crop_date    : "YYYY-MM-DD" — the date the crop was confirmed present
-    months_before: months before crop_date to include (default 6)
-    months_after : months after crop_date to include (default 6)
+    crop_date    : "YYYY-MM-DD" â€” the date the crop was confirmed present
+    months_before: months before crop_date to include (default 3)
+    months_after : months after crop_date to include (default 3)
 
     Returns
     -------
@@ -104,13 +109,13 @@ def _crop_date_to_window(crop_date: str, months_before: int = 6, months_after: i
 # Main predictor
 # ---------------------------------------------------------------------------
 
-class BananaPredictor:
+class CabbagePredictor:
     """
-    Banana crop detection predictor.
+    cabbage crop detection predictor.
 
     Loads the best saved model (Stacking Ensemble / XGBoost / RF) from
     best_model.pkl, which contains the model object, scaler, feature columns,
-    train medians for imputation, and optimal threshold — all saved by train.py.
+    train medians for imputation, and optimal threshold â€” all saved by train.py.
 
     Single-date interface: provide a KML and the date the crop was confirmed.
     The system handles everything else internally.
@@ -184,7 +189,7 @@ class BananaPredictor:
 
 
     # ------------------------------------------------------------------
-    # PRIMARY ENTRY POINT — single date, no date range needed
+    # PRIMARY ENTRY POINT â€” single date, no date range needed
     # ------------------------------------------------------------------
 
     def predict(
@@ -195,39 +200,39 @@ class BananaPredictor:
         output_dir: str = "outputs",
         scale: int = 10,
         probability_threshold: Optional[float] = None,
-        months_before: int = 6,
-        months_after: int = 6,
+        months_before: int = 2,
+        months_after: int = 2,
     ) -> Dict:
         """
-        Detect banana crop in a KML polygon on a specific confirmed date.
+        Detect cabbage crop in a KML polygon on a specific confirmed date.
 
         Parameters
         ----------
         kml_path    : path to .kml or .kmz file
-        crop_date   : "YYYY-MM-DD" — the date the crop was confirmed present.
+        crop_date   : "YYYY-MM-DD" â€” the date the crop was confirmed present.
                       This is the ONLY date you need to provide.
-                      The system automatically downloads ±6 months of satellite
+                      The system automatically downloads Â±2 months of satellite
                       data centred on this date.
-        target_state: Indian state name (optional — used for logging only)
+        target_state: Indian state name (optional â€” used for logging only)
         output_dir  : folder where GeoTIFF outputs are saved
         scale       : pixel resolution in metres (default 10 = Sentinel native)
         probability_threshold : override the 0.5 default if needed
-        months_before : months of history before crop_date (default 6)
-        months_after  : months of future after crop_date (default 6)
+        months_before : months of history before crop_date (default 2)
+        months_after  : months of future after crop_date (default 2)
 
         Returns
         -------
         dict with keys:
-          is_banana            : bool   — True if majority of pixels are banana
-          confidence           : float  — mean banana probability (0–1)
-          banana_fraction      : float  — fraction of pixels classified as banana
-          n_pixels             : int    — total pixels analysed
-          probability_map_path : str    — path to probability GeoTIFF
-          binary_map_path      : str    — path to binary classification GeoTIFF
-          crop_date            : str    — the input crop date
-          window_start         : str    — actual GEE download start date
-          window_end           : str    — actual GEE download end date
-          state                : str    — detected or provided state name
+          is_cabbage            : bool   â€” True if majority of pixels are cabbage
+          confidence           : float  â€” mean cabbage probability (0â€“1)
+          cabbage_fraction      : float  â€” fraction of pixels classified as cabbage
+          n_pixels             : int    â€” total pixels analysed
+          probability_map_path : str    â€” path to probability GeoTIFF
+          binary_map_path      : str    â€” path to binary classification GeoTIFF
+          crop_date            : str    â€” the input crop date
+          window_start         : str    â€” actual GEE download start date
+          window_end           : str    â€” actual GEE download end date
+          state                : str    â€” detected or provided state name
         """
         self.load_models()
 
@@ -235,31 +240,31 @@ class BananaPredictor:
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        # ── Step 1: Parse KML ──────────────────────────────────────────
+        # â”€â”€ Step 1: Parse KML â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         logger.info(f"[1/5] Parsing KML: {kml_path}")
         gdf = self._parse_kml(kml_path, target_state)
         plot_id = gdf["plot_id"].iloc[0]
         state = target_state or gdf["state"].iloc[0]
 
-        # ── Step 2: Compute GEE window from single crop date ───────────
+        # â”€â”€ Step 2: Compute GEE window from single crop date â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         window_start, window_end = _crop_date_to_window(
             crop_date, months_before, months_after
         )
         logger.info(
-            f"[2/5] Crop date: {crop_date} → "
-            f"GEE window: {window_start} → {window_end} "
+            f"[2/5] Crop date: {crop_date} â†’ "
+            f"GEE window: {window_start} â†’ {window_end} "
             f"({months_before + months_after} months)"
         )
 
-        # ── Step 3: Download satellite data ───────────────────────────
+        # â”€â”€ Step 3: Download satellite data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         logger.info(f"[3/5] Downloading Sentinel-1 + Sentinel-2 from GEE...")
         df_wide = self._download_gee_data(gdf, window_start, window_end, scale)
 
-        # ── Step 4: Feature engineering ───────────────────────────────
+        # â”€â”€ Step 4: Feature engineering â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         logger.info("[4/5] Computing crop features...")
         df_2d, time_tags = self._compute_features(df_wide)
 
-        # ── Step 5: Model inference ───────────────────────────────────
+        # â”€â”€ Step 5: Model inference â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         logger.info(f"[5/5] Running {self.model_name} inference...")
 
         # Align features to training columns
@@ -284,17 +289,17 @@ class BananaPredictor:
 
         logger.info(f"  Mean probability: {probs.mean():.3f}")
 
-        # ── Export maps ───────────────────────────────────────────────
+        # â”€â”€ Export maps â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         prob_path, binary_path = self._export_maps(
             df_wide, probs, threshold, output_dir, plot_id, crop_date
         )
 
-        # ── Build result ──────────────────────────────────────────────
-        banana_fraction = float((probs >= threshold).mean())
+        # â”€â”€ Build result â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        cabbage_fraction = float((probs >= threshold).mean())
         result = {
-            "is_banana":            banana_fraction >= 0.5,
+            "is_cabbage":            cabbage_fraction >= 0.5,
             "confidence":           float(probs.mean()),
-            "banana_fraction":      banana_fraction,
+            "cabbage_fraction":      cabbage_fraction,
             "n_pixels":             len(probs),
             "probability_map_path": str(prob_path),
             "binary_map_path":      str(binary_path),
@@ -308,15 +313,15 @@ class BananaPredictor:
         logger.info(
             f"\n{'='*55}\n"
             f"  RESULT  |  {plot_id}  |  {crop_date}\n"
-            f"  Is banana      : {'YES ✓' if result['is_banana'] else 'NO ✗'}\n"
+            f"  Is cabbage      : {'YES âœ“' if result['is_cabbage'] else 'NO âœ—'}\n"
             f"  Confidence     : {result['confidence']*100:.1f}%\n"
-            f"  Banana pixels  : {banana_fraction*100:.1f}% of plot\n"
+            f"  Cabbage pixels  : {cabbage_fraction*100:.1f}% of plot\n"
             f"{'='*55}"
         )
         return result
 
     # ------------------------------------------------------------------
-    # Batch prediction — list of (kml_path, crop_date) pairs
+    # Batch prediction â€” list of (kml_path, crop_date) pairs
     # ------------------------------------------------------------------
 
     def predict_batch(
@@ -364,7 +369,7 @@ class BananaPredictor:
                     "kml_path": job["kml_path"],
                     "crop_date": job.get("crop_date"),
                     "error": str(exc),
-                    "is_banana": None,
+                    "is_cabbage": None,
                 })
         return results
 
@@ -388,23 +393,22 @@ class BananaPredictor:
     ) -> pd.DataFrame:
         from data.gee_downloader import GEEDownloader
         from shapely.ops import unary_union
-        import ee
 
         dl = GEEDownloader(config_path=self.config_path)
         dl.initialize()
 
         union_geom = unary_union(gdf.geometry.values)
-        ee_geom = ee.Geometry(union_geom.__geo_interface__)
+        geojson_dict = union_geom.__geo_interface__
 
         max_pixels = self.cfg["sampling"]["max_pixels_per_plot"]
         df_wide = dl.extract_pixel_timeseries_wide(
-            geometry=ee_geom,
+            geometry_geojson=geojson_dict,
             start_date=start_date,
             end_date=end_date,
             scale=scale,
             max_pixels=max_pixels,
         )
-        logger.info(f"  {df_wide.shape[0]} pixels × {df_wide.shape[1]} columns downloaded")
+        logger.info(f"  {df_wide.shape[0]} pixels Ã— {df_wide.shape[1]} columns downloaded")
         return df_wide
 
     def _compute_features(
@@ -412,12 +416,12 @@ class BananaPredictor:
     ) -> Tuple[pd.DataFrame, list]:
         from features.spectral_indices import SpectralIndexCalculator
         from features.temporal_stats import TemporalStatsExtractor
-        from features.phenology_features import PhenologyExtractor
+        from features.phenology_features_heading import HeadingPhenologyExtractor
 
         time_tags = self._detect_time_tags(df_wide)
-        logger.info(f"  {len(time_tags)} monthly composites: {time_tags[0]} → {time_tags[-1]}")
+        logger.info(f"  {len(time_tags)} monthly composites: {time_tags[0]} -> {time_tags[-1]}")
 
-        # Spectral indices
+        # Spectral indices (NDVI, NDRE, CCCI, EVI, LSWI, etc.)
         calc = SpectralIndexCalculator()
         df_wide = calc.compute_all(df_wide, time_tags=time_tags)
 
@@ -425,8 +429,8 @@ class BananaPredictor:
         stats_ex = TemporalStatsExtractor(self.config_path)
         df_stats = stats_ex.compute(df_wide, time_tags=time_tags)
 
-        # Phenology shape features (region-invariant)
-        pheno_ex = PhenologyExtractor(self.config_path)
+        # Heading-vegetable phenology features (BBCH-scale, cabbage-specific)
+        pheno_ex = HeadingPhenologyExtractor(self.config_path)
         df_pheno = pheno_ex.compute(df_wide, time_tags=time_tags)
 
         meta_cols = [c for c in ["longitude", "latitude", "state", "label", "plot_id"]
@@ -483,9 +487,9 @@ class BananaPredictor:
         binary_path = output_dir / f"{plot_id}_{date_tag}_binary.tif"
 
         _write_tif(prob_path,   prob_raster,   np.float32, crs, transform, nodata=np.nan,
-                   tags={"description": "Banana probability (0-1)", "crop_date": crop_date})
+                   tags={"description": "cabbage probability (0-1)", "crop_date": crop_date})
         _write_tif(binary_path, binary_raster, np.uint8,   crs, transform, nodata=255,
-                   tags={"description": "Banana binary (1=Yes, 0=No)", "crop_date": crop_date,
+                   tags={"description": "cabbage binary (1=Yes, 0=No)", "crop_date": crop_date,
                          "threshold": str(threshold)})
 
         logger.info(f"  Probability map : {prob_path}")
@@ -542,7 +546,7 @@ def _write_tif(path, data, dtype, crs, transform, nodata, tags):
 
 
 # ---------------------------------------------------------------------------
-# CLI — the simplest possible interface for the testing team
+# CLI â€” the simplest possible interface for the testing team
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
@@ -554,7 +558,7 @@ if __name__ == "__main__":
     )
 
     parser = argparse.ArgumentParser(
-        description="Banana crop detection — provide a KML and a confirmed crop date."
+        description="cabbage crop detection â€” provide a KML and a confirmed crop date."
     )
     parser.add_argument("kml_path",  help="Path to .kml or .kmz file")
     parser.add_argument("crop_date", help="Confirmed crop date: YYYY-MM-DD")
@@ -565,7 +569,7 @@ if __name__ == "__main__":
     parser.add_argument("--threshold",  type=float, default=None)
     args = parser.parse_args()
 
-    predictor = BananaPredictor(model_dir=args.model_dir, config_path=args.config)
+    predictor = CabbagePredictor(model_dir=args.model_dir, config_path=args.config)
 
     result = predictor.predict(
         kml_path=args.kml_path,
@@ -576,14 +580,14 @@ if __name__ == "__main__":
     )
 
     print("\n" + "="*55)
-    print("BANANA DETECTION RESULT")
+    print("cabbage detection RESULT")
     print("="*55)
     print(f"  KML file       : {args.kml_path}")
     print(f"  Crop date      : {result['crop_date']}")
     print(f"  State          : {result['state']}")
-    print(f"  Is banana      : {'YES' if result['is_banana'] else 'NO'}")
+    print(f"  Is cabbage      : {'YES' if result['is_cabbage'] else 'NO'}")
     print(f"  Confidence     : {result['confidence']*100:.1f}%")
-    print(f"  Banana pixels  : {result['banana_fraction']*100:.1f}%")
+    print(f"  Cabbage pixels  : {result['cabbage_fraction']*100:.1f}%")
     print(f"  Pixels total   : {result['n_pixels']}")
     print(f"  Probability map: {result['probability_map_path']}")
     print(f"  Binary map     : {result['binary_map_path']}")

@@ -1,0 +1,3 @@
+Place non-cabbage KML polygon files here.
+Include: cauliflower, broccoli, spinach, mustard, potato, fallow, urban.
+Filename format: {plot_id}_{state}_{anchor_date}_{crop_type}.kml

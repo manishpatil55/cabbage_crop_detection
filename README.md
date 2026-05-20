@@ -1,312 +1,267 @@
-# 🍌 Banana Crop Detection System
+# 🥬 Cabbage Crop Detection System
 
-Pan-India banana crop detection using **Sentinel-1 SAR + Sentinel-2 optical** satellite data with a **Stacking Ensemble** (Random Forest + XGBoost + Logistic Regression meta-learner).
+## Pan-India Cabbage Detection from Satellite Imagery
 
-**Accuracy: 88.84%** | **F1: 0.902** | **AUC-ROC: 0.951** (at calibrated threshold 0.220)
+A production-grade machine learning pipeline that detects **cabbage (Brassica oleracea var. capitata)** crops from satellite imagery across India using a **Stacking Ensemble** of Random Forest + XGBoost with Sentinel-1 (SAR) and Sentinel-2 (optical) data fusion.
 
 ---
 
-## Quick Start
+## 🏗️ Architecture
 
-### 1. Install
-
-```bash
-cd banana_detection
-pip install -r requirements.txt
-earthengine authenticate       # One-time GEE setup
+```
+KML Polygon → GEE Download → Spectral Indices → Temporal Stats → Heading Phenology → Stacking Ensemble → Classification
+                  ↓                  ↓                 ↓               ↓
+          Sentinel-1 (SAR)    12 indices         Monthly stats      10 BBCH heading
+          Sentinel-2 (Opt)    (NDVI, NDRE,       per band           features per VI
+                               CCCI, EVI,                           (onset, plateau,
+                               LSWI, etc.)                           harvest drop, etc.)
 ```
 
-### 2. Train
+### Key Technical Features
+- **Satellite Fusion**: Sentinel-1 SAR (cloud-free radar) + Sentinel-2 optical (10m resolution)
+- **12 Spectral Indices**: NDVI, EVI, NDWI, LSWI, SAVI, MSAVI, NBR, NDRE, **CCCI**, RVI, RFDI, CR
+- **BBCH Heading Phenology**: Features tailored for heading vegetables (Stage 4: head formation)
+- **Monthly Compositing**: ±2 month window captures cabbage's rapid 60-120 day lifecycle
+- **State-Aware Calendar**: India-specific seasonal windows for 5 agro-climatic zones
+- **Spatial Cross-Validation**: GroupShuffleSplit by plot_id prevents spatial data leakage
 
+---
+
+## 🚀 Quick Start
+
+### 1. Install Dependencies
 ```bash
-# Place KML files in data/kml/banana/ and data/kml/non_banana/
+pip install -r requirements.txt
+```
+
+### 2. Authenticate Google Earth Engine
+```bash
+earthengine authenticate
+```
+
+### 3. Add Training Data
+Place KML polygon files in:
+```
+data/kml/cabbage/         # Cabbage field boundaries (currently 50 KMLs)
+data/kml/non_cabbage/     # Non-cabbage fields (currently 50 KMLs)
+```
+
+**Naming convention**: `{plot_id}_{date}.kml`
+Examples: `1_feb2024.kml`, `15_jun2022.kml`, `31_mar2026.kml`
+
+The anchor date is extracted automatically from the filename and used to centre
+the ±3 month satellite download window on the confirmed crop presence date.
+
+### 4. Train the Model
+```bash
 python train.py
 ```
 
-### 3. Run API Server
-
+### 5. Run the API Server
 ```bash
 python api.py
-# Server: http://localhost:8008
-# Swagger UI: http://localhost:8008/docs
 ```
+Then open **http://localhost:8008/docs** for Swagger UI.
 
-### 4. Detect Banana (API)
-
-```bash
-curl -X POST http://localhost:8008/detect \
-  -F "kml_file=@farm_boundary.kml" \
-  -F "crop_date=2025-10-12"
-```
-
-### 5. Detect Banana (Python)
-
-```python
-from inference.predictor import BananaPredictor
-
-predictor = BananaPredictor(model_dir="models/saved", config_path="config.yaml")
-result = predictor.predict(
-    kml_path="path/to/farm.kml",
-    crop_date="2025-10-12",        # Date banana was confirmed present
-)
-print(f"Is Banana: {result['is_banana']}")
-print(f"Confidence: {result['confidence']:.1%}")
-```
+### 6. Make Predictions
+Upload a KML file to the `/detect` endpoint with a crop date.
 
 ---
 
-## Architecture
+## 📁 Project Structure
 
 ```
-KML File + Crop Date
-   │
-   ▼
-┌───────────────────────────────────────────────────────────────┐
-│  DATA LAYER                                                    │
-│  kml_parser.py → gee_downloader.py → sample_generator.py      │
-│  (Parse KML)     (S1+S2 monthly       (Balanced pixel         │
-│                   composites via GEE)   sampling ±3 months)    │
-└───────────────────────────────────────────────────────────────┘
-   │
-   ▼
-┌───────────────────────────────────────────────────────────────┐
-│  FEATURE ENGINEERING (436 features → 80 selected)             │
-│                                                                │
-│  spectral_indices.py   temporal_stats.py  phenology_features.py│
-│  8 Optical indices:    Per-band stats:    Growth curve shape:  │
-│  NDVI,EVI,NDWI,LSWI   min/max/mean/std   AUC, peak, slopes   │
-│  SAVI,MSAVI,NBR,NDRE   p10–p90, CV       season length        │
-│  3 SAR indices:        Monsoon vs dry     green-up timing      │
-│  RVI, RFDI, CR         SAR-optical ratios NDVI-VV correlation  │
-└───────────────────────────────────────────────────────────────┘
-   │
-   ▼
-┌──────────────┐  ┌──────────────┐
-│ Random Forest│  │   XGBoost    │
-│  (500 trees) │  │ (early stop) │
-└──────┬───────┘  └──────┬───────┘
-       │  5-fold OOF      │
-       └────────┬─────────┘
-                ▼
-     ┌─────────────────────┐
-     │  Logistic Regression │
-     │  Meta-Learner        │
-     └──────────┬──────────┘
-                │
-                ▼
-     Threshold: 0.220 (calibrated)
-     Accuracy: 88.84% | F1: 0.902
-                │
-                ▼
-     ┌─────────────────────┐
-     │  GeoTIFF Output     │
-     │  + JSON API Response │
-     └─────────────────────┘
-```
-
----
-
-## Project Structure
-
-```
-banana_detection/
-├── config.yaml                  # All configuration
-├── train.py                     # Training pipeline (run this)
-├── api.py                       # FastAPI REST server
-├── utils.py                     # Shared utility functions
-├── requirements.txt             # Python dependencies
-│
+cabbage_detection/
+├── api.py                              # FastAPI REST server
+├── train.py                            # Training pipeline (v2, production-optimised)
+├── config.yaml                         # Configuration (cabbage-specific)
+├── requirements.txt                    # Python dependencies
+├── utils.py                            # Shared utilities
 ├── data/
-│   ├── kml_parser.py            # KML/KMZ → GeoDataFrame
-│   ├── gee_downloader.py        # Multi-backend satellite downloader (GEE/PC/SH)
-│   ├── sample_generator.py      # Positive/negative pixel sampling
-│   ├── kml/
-│   │   ├── banana/              # Banana farm KML files
-│   │   └── non_banana/          # Non-banana plot KML files
-│   └── processed/               # Cached satellite data
-│
+│   ├── gee_downloader.py               # Multi-backend satellite downloader
+│   │                                     (GEE / Planetary Computer / Sentinel Hub)
+│   ├── kml_parser.py                   # KML/KMZ polygon parser with anchor dates
+│   ├── sample_generator.py             # Pixel sampling with buffer zones
+│   └── kml/
+│       ├── cabbage/                    # Cabbage KML training data (50 plots)
+│       └── non_cabbage/               # Non-cabbage KML training data (50 plots)
 ├── features/
-│   ├── spectral_indices.py      # 11 indices (8 optical + 3 SAR)
-│   ├── temporal_stats.py        # Temporal statistics + seasonal contrast
-│   └── phenology_features.py    # Phenological shape features
-│
+│   ├── spectral_indices.py             # 12 spectral indices (incl. CCCI, NDRE)
+│   ├── temporal_stats.py               # Temporal statistics per band
+│   ├── phenology_features.py           # ⚠️ DEPRECATED — legacy perennial phenology
+│   └── phenology_features_heading.py   # ✅ BBCH heading-vegetable phenology (active)
 ├── models/
-│   ├── base_models.py           # RF and XGBoost model wrappers
-│   └── saved/                   # Trained model files
-│       ├── best_model.pkl       # Stacking ensemble (15 MB)
-│       ├── rf_model.pkl         # Standalone RF
-│       └── xgb_model.pkl        # Standalone XGBoost
-│
+│   ├── base_models.py                  # RF + XGBoost wrappers
+│   └── saved/                          # Trained model artifacts
 ├── inference/
-│   └── predictor.py             # BananaPredictor class (CLI inference)
-│
-└── outputs/                     # GeoTIFF probability + binary maps
+│   └── predictor.py                    # CabbagePredictor inference pipeline
+└── outputs/                            # Probability + binary GeoTIFF maps
 ```
 
----
-
-## Satellites Used
-
-Both **Sentinel-1** and **Sentinel-2** are downloaded every month:
-
-| Satellite | Type | Bands | Resolution | Cloud-proof? |
-|:---|:---|:---|:---:|:---:|
-| **Sentinel-2** | Optical | B2,B3,B4,B5,B6,B7,B8,B8A,B11,B12 | 10–20m | ❌ Masked by clouds |
-| **Sentinel-1** | SAR Radar | VV, VH | 10m | ✅ Penetrates clouds |
-
-### During cloudy months:
-- **Sentinel-2** → cloud-masked → NaN (imputed with training medians)
-- **Sentinel-1** → always valid → SAR features carry the classification
+> **Important**: Both `train.py` and `inference/predictor.py` use
+> `HeadingPhenologyExtractor` from `phenology_features_heading.py`.
+> The legacy `phenology_features.py` is deprecated and not used.
 
 ---
 
-## Spectral Indices (11 total)
+## 🌱 Cabbage Detection Science
 
-### Optical (Sentinel-2) — 8 indices
+### Why Cabbage is Different from Other Crops
 
-| Index | Formula | Purpose |
-|:---|:---|:---|
-| **NDVI** | (B8−B4)/(B8+B4) | Vegetation greenness |
-| **EVI** | 2.5×(B8−B4)/(B8+6×B4−7.5×B2+1) | Enhanced vegetation (soil-corrected) |
-| **NDWI** | (B3−B8)/(B3+B8) | Water/moisture content |
-| **LSWI** | (B8−B11)/(B8+B11) | Leaf water content |
-| **SAVI** | (B8−B4)/(B8+B4+0.5)×1.5 | Soil-adjusted vegetation |
-| **MSAVI** | (2×B8+1−√((2×B8+1)²−8×(B8−B4)))/2 | Modified soil adjustment |
-| **NBR** | (B8−B12)/(B8+B12) | Crop residue/moisture |
-| **NDRE** | (B5−B4)/(B5+B4) | Chlorophyll (red edge) |
+| Dimension | Cabbage Signature |
+|:---|:---|
+| **Lifecycle** | Annual, 60-120 days transplant → harvest |
+| **Season** | Rabi (cool-season): Oct-Mar across India |
+| **Canopy** | Low (30-60cm), rosette → compact head |
+| **Key spectral** | NDRE + CCCI best for growth status |
+| **Red-edge advantage** | Red-edge (Band 5) penetrates deeper into cabbage canopy than red (Band 4) |
+| **SAR** | Weak-moderate backscatter (low canopy) |
+| **Field size** | Small: 0.1-1 ha (fragmented) |
+| **Confusion risk** | Cauliflower, broccoli (same Brassica family) |
 
-### SAR (Sentinel-1) — 3 indices
+### Heading Phenology Features (BBCH-Scale)
 
-| Index | Formula | Purpose |
-|:---|:---|:---|
-| **RVI** | 4×VH/(VV+VH) | Biomass estimation |
-| **RFDI** | (VV−VH)/(VV+VH) | Canopy density |
-| **CR** | VH/VV | Volume scattering |
+The `HeadingPhenologyExtractor` computes 10 features per vegetation index,
+plus cross-index correlations, following the BBCH scale for heading vegetables:
+
+1. **Heading onset detection** — transition from vegetative to head formation (BBCH Stage 4)
+2. **Heading duration** — consecutive periods with high VI values
+3. **Plateau stability** — std during heading phase (lower = healthier)
+4. **Green-up rate** — rapid leaf expansion slope
+5. **Harvest drop** — sharp NDVI decline detected (binary 1/0)
+6. **Harvest drop magnitude** — largest single-step decline
+7. **Decline rate** — peak-to-end rate of change
+8. **Time to peak** — normalized peak timing
+9. **AUC** — area under curve (cumulative productivity)
+10. **Pre/post heading ratio** — mean index ratio before/after onset
+
+**Cross-index features:**
+- NDVI-NDRE heading correlation (distinguishes cabbage from other greens)
+- NDVI-VV SAR temporal correlation (canopy structure vs radar response)
+
+### Why NDRE > NDVI for Cabbage
+
+Research (Ryu et al. 2024) shows that **NDRE outperforms NDVI** for cabbage
+growth assessment because:
+- Red-edge light (Band 5, ~705 nm) penetrates deeper into the compact cabbage canopy
+- NDVI saturates in dense canopies, while NDRE continues to differentiate growth stages
+- The **CCCI** (Canopy Chlorophyll Content Index) normalises NDRE and correlates
+  strongly with nitrogen status in heading vegetables
 
 ---
 
-## API Response Format
+## 🌍 India Seasonal Calendar
+
+| Region | States | Transplant | Harvest |
+|:---|:---|:---|:---|
+| Northern Plains | UP, Bihar, Punjab, Haryana | Sep-Oct | Dec-Feb |
+| Eastern | West Bengal, Odisha, Assam | Oct-Dec | Jan-Mar |
+| Western/Central | Gujarat, MP, Maharashtra | Nov-Dec | Feb-Mar |
+| Southern | Karnataka, Tamil Nadu | Jun-Nov | Sep-Apr |
+| Hills | Himachal, Uttarakhand, NE | Apr-Sep | Jul-Nov |
+
+---
+
+## 📊 API Response Format
 
 ```json
 {
-  "verdict": "✅ HIGH CONFIDENCE — Banana plantation detected. 85% of pixels classified as banana.",
-  "classification": "BANANA",
+  "verdict": "✅ HIGH CONFIDENCE — Cabbage crop detected. 82% of pixels classified as cabbage.",
+  "classification": "CABBAGE",
   "label": 1,
   "confidence": "HIGH",
-  "banana_percentage": 85.0,
-
-  "area_hectares": 0.74,
-  "centroid_latitude": 21.226072,
-  "centroid_longitude": 75.623744,
-  "bounding_box": { "north": 21.226, "south": 21.225, "east": 75.624, "west": 75.623 },
-  "state": "Maharashtra",
-
-  "total_pixels": 120,
-  "banana_pixels": 102,
-  "non_banana_pixels": 18,
-  "mean_probability": 0.72,
-  "max_probability": 0.96,
-  "min_probability": 0.11,
-
-  "cloud_free_percentage": 100.0,
-  "cloudy_months": 0,
-  "total_months": 7,
-  "cloud_details": { "2023_08": "clear", "2023_09": "clear", "...": "..." },
+  "cabbage_percentage": 82.0,
+  "area_hectares": 0.45,
+  "centroid_latitude": 22.5723,
+  "centroid_longitude": 88.3639,
+  "state": "West Bengal",
+  "total_pixels": 50,
+  "cabbage_pixels": 41,
+  "non_cabbage_pixels": 9,
+  "mean_probability": 0.7823,
+  "cloud_free_percentage": 95.0,
   "data_quality": "EXCELLENT",
-
   "model_name": "Stacking Ensemble (Random Forest + XGBoost)",
-  "threshold": 0.220,
-  "satellites_used": "Sentinel-1 (SAR) + Sentinel-2 (Optical)",
-  "date_checked": "2023-11-15",
-  "satellite_window": "2023-08-15 to 2024-02-15"
+  "satellites_used": "Sentinel-1 (SAR) + Sentinel-2 (Optical)"
 }
 ```
 
 ---
 
-## Classification Logic
+## 📋 Configuration Reference
 
-| Banana % | Classification | Label | Confidence |
-|:---:|:---|:---:|:---|
-| ≥ 70% | BANANA | 1 | HIGH |
-| 40–69% | BANANA | 1 | MODERATE |
-| 10–39% | NON-BANANA | 0 | LOW |
-| < 10% | NON-BANANA | 0 | HIGH |
+Key settings in `config.yaml`:
 
----
-
-## Model Performance
-
-| Model | Accuracy | F1 | AUC-ROC |
-|:---|:---:|:---:|:---:|
-| Random Forest | 77.39% | 0.759 | 0.9486 |
-| XGBoost | 81.04% | 0.807 | 0.9476 |
-| **Stacking (t=0.220)** | **88.84%** | **0.902** | **0.9513** |
-
-### Training Data
-- **100 KML plots** (50 banana + 50 non-banana)
-- **14,542 pixel samples** (7,367 banana + 7,175 non-banana)
-- **Regions**: Maharashtra (Jalgaon) + Andhra Pradesh
-- **Spatial CV**: GroupShuffleSplit by `plot_id` (no data leakage)
-
----
-
-## Configuration (`config.yaml`)
-
-| Key | Value | Description |
+| Setting | Value | Why |
 |:---|:---|:---|
-| `data_backend` | `"gee"` | GEE / planetary_computer / sentinel_hub |
-| `gee.project_id` | `"crop-detection-494609"` | Your GEE project ID |
-| `compositing.months_before` | 3 | Training: ±3 months from anchor date |
-| `inference.probability_threshold` | **0.220** | Calibrated classification threshold |
-| `sampling.buffer_m` | 750 | Negative sample buffer (meters) |
+| `composite_frequency` | monthly | Monthly composites for 60-120 day crop |
+| `months_before/after` | 2 | ±2 months captures full lifecycle |
+| `buffer_m` | 250 | Sized for fragmented 0.1-1 ha fields |
+| `minimum_field_area_ha` | 0.10 | 10 Sentinel pixels minimum |
+| `probability_threshold` | 0.200 | Calibrated after training |
+| `key_indices` | NDVI, NDRE, EVI, LSWI, CCCI | Red-edge emphasis for heading vegetables |
+| `function_set` | heading_vegetable | BBCH-scale phenology features |
 
 ---
 
-## Adding New Training Data
+## 🔬 Training Data
 
-1. Place new KML files in `data/kml/banana/` or `data/kml/non_banana/`
-2. Name format: `<number>_<date>.kml` (e.g., `51_15nov2025.kml`)
-3. Run `python train.py` — retrains from scratch with all data
-4. Restart API: `python api.py`
+### Current Dataset (v1)
+
+| Category | Count | Details |
+|:---|:---|:---|
+| Cabbage KMLs | 50 plots | Dates: Feb 2024, Jun 2022, Apr 2024, May 2022, Mar 2026 |
+| Non-cabbage KMLs | 50 plots | Diverse non-cabbage backgrounds |
+
+### Recommended for Production (v2+)
+
+| Category | Minimum | Recommended |
+|:---|:---|:---|
+| Cabbage KMLs | 60 plots | 80+ plots |
+| Non-cabbage KMLs | 80 plots | 100+ plots |
+| States covered | 3 | 5+ (must include West Bengal, Odisha) |
+| Seasons | 1 Rabi | 2+ seasons |
+
+Non-cabbage data **must include explicit brassica negatives** (cauliflower, broccoli)
+to prevent confusion within the same family.
 
 ---
 
-## Troubleshooting
+## 🚀 Production Deployment
 
-**GEE authentication error:**
-```bash
-earthengine authenticate --auth_mode=notebook
-```
+### Train-Inference Consistency
 
-**Port 8008 already in use:**
+The pipeline ensures feature consistency between training and inference:
+
+| Component | Training (`train.py`) | Inference (`predictor.py` / `api.py`) |
+|:---|:---|:---|
+| Phenology extractor | `HeadingPhenologyExtractor` | `HeadingPhenologyExtractor` ✅ |
+| Spectral indices | 12 indices (NDVI → CR) | Same 12 indices ✅ |
+| Window | ±2 months (from config) | ±2 months (from config) ✅ |
+| Scaler | Fit on training data | Applied from saved scaler ✅ |
+| NaN imputation | Training medians | Same training medians ✅ |
+
+### Running the API
+
 ```bash
-# Windows
-netstat -aon | findstr :8008
-taskkill /PID <pid> /F
 python api.py
+# → Swagger UI: http://localhost:8008/docs
+# → Health check: http://localhost:8008/health
 ```
 
-**No satellite data returned:**
-- Check your KML has valid polygon geometry
-- Check the crop_date is in YYYY-MM-DD format
-- GEE may be slow — try again after a few minutes
+### CLI Inference
 
-**Low confidence on new regions:**
-Add a few KML plots from the new state to the training data and retrain.
-
----
-
-## Tech Stack
-
-- **Python 3.9+** — Core language
-- **scikit-learn + XGBoost** — ML models
-- **Google Earth Engine** — Primary satellite backend
-- **FastAPI + Uvicorn** — REST API server
-- **Sentinel-1 + Sentinel-2** — Satellite imagery
-- **rasterio** — GeoTIFF export
-- **geopandas + fiona** — KML parsing
+```bash
+python inference/predictor.py plots/field_42.kml 2024-12-15
+python inference/predictor.py plots/field_42.kml 2024-12-15 --state "West Bengal"
+```
 
 ---
 
-> **Full technical reference:** See [ARCHITECTURE_ANALYSIS.md](ARCHITECTURE_ANALYSIS.md) for complete documentation of all 11 spectral indices, 436 features, model internals, cloud cover behavior, and bug fix history.
+## 📚 References
+
+- BBCH-scale for leafy vegetables forming heads (Meier et al.)
+- Ryu et al. (2024): NDRE for cabbage growth assessment
+- Besand & Katroschan (2022): CCCI for cabbage N status (IHC 2022)
+- India cabbage production: West Bengal ~25%, Odisha ~11%, Gujarat ~8%
+- Sentinel-2 Red-Edge bands for heading vegetable discrimination

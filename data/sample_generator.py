@@ -4,27 +4,27 @@ sample_generator.py
 Generate balanced training/testing pixel samples from KML plots.
 
 For each KML polygon:
-  - Class 1 (Banana)     : all pixels inside the polygon
-  - Class 0 (Non-Banana) : equal number of random pixels in a buffer ring
-                           (500 m–1 km outside the polygon boundary)
+  - Class 1 (Cabbage)     : all pixels inside the polygon
+  - Class 0 (Non-Cabbage) : equal number of random pixels in a buffer ring
+                           (500 mâ€“1 km outside the polygon boundary)
 
 Jalgaon-specific design notes
 ------------------------------
 When all positive KMLs come from a single region (e.g., Jalgaon, Maharashtra),
-standard random CV will leak spatial autocorrelation — nearby pixels from the
+standard random CV will leak spatial autocorrelation â€” nearby pixels from the
 same plot appear in both train and val, inflating metrics.
 
 This module therefore implements:
 
-  1. **Negative sample diversity** — negative (non-banana) points are drawn
+  1. **Negative sample diversity** â€” negative (non-Cabbage) points are drawn
      from a configurable list of external regions/states so the model learns
      a globally discriminative boundary, not just "not-Jalgaon".
 
-  2. **Leave-One-Plot-Out (LOPO) CV split** — splits are grouped by plot_id
+  2. **Leave-One-Plot-Out (LOPO) CV split** â€” splits are grouped by plot_id
      so every pixel from a held-out plot is unseen during training.
      `split_leave_one_plot_out()` yields (train_idx, val_idx) pairs.
 
-  3. **Monsoon hold-out plot** — `reserve_monsoon_test_plot()` selects the
+  3. **Monsoon hold-out plot** â€” `reserve_monsoon_test_plot()` selects the
      plot with the highest cloud-gap fraction (most monsoon-affected) and
      reserves it as a dedicated test set for monsoon robustness evaluation.
 
@@ -146,7 +146,7 @@ def _utm_zone_for_india(lon: float) -> str:
 
 class SampleGenerator:
     """
-    Generate balanced pixel samples for banana crop detection training.
+    Generate balanced pixel samples for cabbage crop detection training.
 
     Parameters
     ----------
@@ -198,7 +198,7 @@ class SampleGenerator:
         --------------------------
         If the GeoDataFrame has ``date_start`` / ``date_end`` columns (set by
         KMLParser from filenames like "1_3aug2023.kml"), each plot uses its own
-        ±12-month window centred on the confirmed banana date.
+        Â±12-month window centred on the confirmed cabbage date.
 
         ``start_date`` / ``end_date`` are used as a **fallback** for plots that
         have no anchor date in their filename.  If neither is provided and a
@@ -210,7 +210,7 @@ class SampleGenerator:
         local buffer ring alone will be geographically narrow and the model
         will overfit to Jalgaon-specific background.
 
-        Pass ``external_neg_gdf`` (a GeoDataFrame of non-banana polygons from
+        Pass ``external_neg_gdf`` (a GeoDataFrame of non-cabbage polygons from
         other states) OR ``external_neg_regions`` (state names already present
         in gdf with label=0) to inject geographically diverse negatives.
 
@@ -221,7 +221,7 @@ class SampleGenerator:
         start_date           : fallback GEE start date "YYYY-MM-DD"
         end_date             : fallback GEE end date "YYYY-MM-DD"
         scale                : pixel resolution in metres
-        external_neg_gdf     : optional GeoDataFrame of external non-banana
+        external_neg_gdf     : optional GeoDataFrame of external non-cabbage
                                polygons (label=0) from other regions/states
         external_neg_regions : optional list of state names already in gdf
                                whose label=0 rows should be treated as the
@@ -229,9 +229,9 @@ class SampleGenerator:
 
         Returns
         -------
-        df_2d   : pd.DataFrame  — wide-format features for RF/XGBoost
-        arr_3d  : np.ndarray    — (n_samples, n_timesteps, n_features) for BiLSTM
-        meta_df : pd.DataFrame  — per-sample metadata (lon, lat, state, label,
+        df_2d   : pd.DataFrame  â€” wide-format features for RF/XGBoost
+        arr_3d  : np.ndarray    â€” (n_samples, n_timesteps, n_features) for BiLSTM
+        meta_df : pd.DataFrame  â€” per-sample metadata (lon, lat, state, label,
                                   plot_id, cloud_gap_fraction, anchor_date,
                                   date_start, date_end)
         """
@@ -249,7 +249,7 @@ class SampleGenerator:
 
         self.downloader.initialize()
 
-        # Separate positive (banana) and external-negative plots
+        # Separate positive (Cabbage) and external-negative plots
         pos_gdf = gdf[gdf["label"] == 1].copy()
         ext_neg_gdf = gdf[gdf["label"] == 0].copy()
 
@@ -268,7 +268,7 @@ class SampleGenerator:
         all_rows: List[pd.DataFrame] = []
 
         # ----------------------------------------------------------------
-        # 1. Positive samples — each plot uses its own anchor-date window
+        # 1. Positive samples â€” each plot uses its own anchor-date window
         # ----------------------------------------------------------------
         for _, plot in pos_gdf.iterrows():
             plot_id = plot["plot_id"]
@@ -357,7 +357,7 @@ class SampleGenerator:
                     logger.warning(f"  Failed local-neg sampling for {plot_id}: {exc}")
 
         # ----------------------------------------------------------------
-        # 2. External negative samples — diverse regions
+        # 2. External negative samples â€” diverse regions
         # ----------------------------------------------------------------
         if not ext_neg_gdf.empty:
             logger.info(
@@ -371,35 +371,35 @@ class SampleGenerator:
                 5, total_pos // max(1, len(ext_neg_gdf)),
             )
 
-            # Collect all banana date windows so we can assign one to
-            # non-banana plots that have no date in their filename.
-            # We spread the windows across non-banana plots so the model
-            # sees non-banana pixels from many different seasons.
-            banana_windows = []
+            # Collect all cabbage date windows so we can assign one to
+            # non-cabbage plots that have no date in their filename.
+            # We spread the windows across non-cabbage plots so the model
+            # sees non-cabbage pixels from many different seasons.
+            cabbage_windows = []
             for r in all_rows:
                 if r["label"].iloc[0] == 1:
                     ds = r["date_start"].iloc[0]
                     de = r["date_end"].iloc[0]
-                    if ds and de and (ds, de) not in banana_windows:
-                        banana_windows.append((ds, de))
+                    if ds and de and (ds, de) not in cabbage_windows:
+                        cabbage_windows.append((ds, de))
 
-            # Fallback: if no banana windows collected yet, use a safe default
-            if not banana_windows:
-                banana_windows = [("2022-06-01", "2023-06-01")]
+            # Fallback: if no cabbage windows collected yet, use a safe default
+            if not cabbage_windows:
+                cabbage_windows = [("2022-06-01", "2023-06-01")]
 
             for neg_idx, (_, plot) in enumerate(ext_neg_gdf.iterrows()):
                 plot_id = plot["plot_id"]
                 state = plot["state"]
                 geom = plot.geometry
 
-                # Priority: plot's own date_start/end -> rotate through banana windows
+                # Priority: plot's own date_start/end -> rotate through cabbage windows
                 p_start = plot.get("date_start") or start_date
                 p_end   = plot.get("date_end")   or end_date
 
-                # Non-banana KMLs with no date: assign a banana window
-                # Round-robin so different non-banana plots cover different seasons
+                # non-cabbage KMLs with no date: assign a cabbage window
+                # Round-robin so different non-cabbage plots cover different seasons
                 if not p_start or not p_end:
-                    p_start, p_end = banana_windows[neg_idx % len(banana_windows)]
+                    p_start, p_end = cabbage_windows[neg_idx % len(cabbage_windows)]
                     logger.info(
                         f"[EXT-NEG] plot={plot_id} | state={state} | "
                         f"auto-window=[{p_start} -> {p_end}]"
@@ -442,7 +442,7 @@ class SampleGenerator:
         n_pos = (df_combined["label"] == 1).sum()
         n_neg = (df_combined["label"] == 0).sum()
         logger.info(
-            f"Raw totals: {n_pos} banana | {n_neg} non-banana | "
+            f"Raw totals: {n_pos} cabbage | {n_neg} non-cabbage | "
             f"ratio={n_neg/max(n_pos,1):.2f}:1"
         )
 
@@ -453,8 +453,8 @@ class SampleGenerator:
             drop_idx = rng.choice(neg_idx, size=n_neg - max_neg, replace=False)
             df_combined = df_combined.drop(index=drop_idx).reset_index(drop=True)
             logger.info(
-                f"Balanced to {(df_combined['label']==1).sum()} banana | "
-                f"{(df_combined['label']==0).sum()} non-banana"
+                f"Balanced to {(df_combined['label']==1).sum()} cabbage | "
+                f"{(df_combined['label']==0).sum()} non-cabbage"
             )
 
         # ----------------------------------------------------------------
@@ -547,9 +547,9 @@ class SampleGenerator:
 
         Files created
         -------------
-        <out_dir>/<prefix>_2d.csv       — wide-format feature table
-        <out_dir>/<prefix>_3d.npy       — 3D array for BiLSTM
-        <out_dir>/<prefix>_meta.csv     — per-sample metadata
+        <out_dir>/<prefix>_2d.csv       â€” wide-format feature table
+        <out_dir>/<prefix>_3d.npy       â€” 3D array for BiLSTM
+        <out_dir>/<prefix>_meta.csv     â€” per-sample metadata
         """
         out_dir = Path(out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -580,7 +580,7 @@ class SampleGenerator:
         return df_2d, arr_3d, meta_df
 
     # ------------------------------------------------------------------
-    # Train / test split — Leave-One-Plot-Out (LOPO)
+    # Train / test split â€” Leave-One-Plot-Out (LOPO)
     # ------------------------------------------------------------------
 
     @staticmethod
@@ -592,7 +592,7 @@ class SampleGenerator:
         """
         Leave-One-Plot-Out cross-validation grouped by plot_id.
 
-        Each fold holds out ALL pixels from one banana plot (and its paired
+        Each fold holds out ALL pixels from one cabbage plot (and its paired
         local-buffer negatives) as the validation set.  This prevents spatial
         autocorrelation leakage that would occur with random pixel-level splits
         when all positives come from the same geographic region (Jalgaon).
@@ -600,7 +600,7 @@ class SampleGenerator:
         Parameters
         ----------
         meta_df               : metadata DataFrame with plot_id and label columns
-        positive_only_rotation: if True, only rotate over banana (label=1) plots;
+        positive_only_rotation: if True, only rotate over cabbage (label=1) plots;
                                 external negatives always stay in training.
                                 Set False to also rotate over negative plots.
         seed                  : random seed for shuffling fold order
@@ -616,7 +616,7 @@ class SampleGenerator:
 
         # Identify which plot_ids to rotate over
         if positive_only_rotation:
-            # Only rotate banana plots; external negatives (_ext_neg suffix)
+            # Only rotate cabbage plots; external negatives (_ext_neg suffix)
             # always stay in training
             rotate_plots = meta_df.loc[
                 (meta_df["label"] == 1),
@@ -645,7 +645,7 @@ class SampleGenerator:
             n_val_neg = int((meta_df.iloc[val_idx]["label"] == 0).sum())
             logger.info(
                 f"LOPO fold | held={held_plot} | "
-                f"val: {n_val_pos} banana + {n_val_neg} non-banana | "
+                f"val: {n_val_pos} cabbage + {n_val_neg} non-cabbage | "
                 f"train: {len(train_idx)} samples"
             )
             yield train_idx, val_idx, held_plot
@@ -661,7 +661,7 @@ class SampleGenerator:
 
         This ensures the BiLSTM validation strategy always includes at least
         one complete Jalgaon plot where optical data is heavily missing during
-        the monsoon (June–September), forcing the model to rely on SAR features
+        the monsoon (Juneâ€“September), forcing the model to rely on SAR features
         for those months.
 
         Parameters
@@ -672,8 +672,8 @@ class SampleGenerator:
 
         Returns
         -------
-        train_idx      : np.ndarray — indices for training
-        monsoon_idx    : np.ndarray — indices for monsoon test set
+        train_idx      : np.ndarray â€” indices for training
+        monsoon_idx    : np.ndarray â€” indices for monsoon test set
         reserved_plots : list of reserved plot_ids
         """
         if "cloud_gap_fraction" not in meta_df.columns:
@@ -682,22 +682,22 @@ class SampleGenerator:
                 "Re-run generate() with the updated SampleGenerator."
             )
 
-        # Compute mean cloud-gap fraction per banana plot
-        banana_meta = meta_df[meta_df["label"] == 1].copy()
-        plot_gap = (
-            banana_meta.groupby("plot_id")["cloud_gap_fraction"]
+        # Compute mean cloud-gap fraction per cabbage plot
+        cabbage_meta = meta_df[meta_df["label"] == 1].copy()
+        plot_cloud_means = (
+            cabbage_meta.groupby("plot_id")["cloud_gap_fraction"]
             .mean()
             .sort_values(ascending=False)
         )
 
-        if len(plot_gap) == 0:
-            raise ValueError("No banana plots found in meta_df.")
+        if len(plot_cloud_means) == 0:
+            raise ValueError("No cabbage plots found in meta_df.")
 
-        reserved_plots = plot_gap.head(n_reserve).index.tolist()
+        reserved_plots = plot_cloud_means.head(n_reserve).index.tolist()
         logger.info(
             f"Monsoon test plots (highest cloud-gap): "
             + ", ".join(
-                f"{p} (gap={plot_gap[p]:.2f})" for p in reserved_plots
+                f"{p} (gap={plot_cloud_means[p]:.2f})" for p in reserved_plots
             )
         )
 

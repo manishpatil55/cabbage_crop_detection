@@ -1,6 +1,11 @@
 """
 phenology_features.py
 =====================
+.. deprecated:: 2.0
+    This module is DEPRECATED. Use ``phenology_features_heading.py`` instead.
+    This file contains legacy perennial-crop phenology features.
+    The cabbage detection pipeline uses ``HeadingPhenologyExtractor``
+    from ``phenology_features_heading.py`` (BBCH-scale heading features).
 Extract phenological shape features from vegetation index time series.
 
 These features are region-invariant because they describe the *shape* of the
@@ -168,7 +173,7 @@ def count_growing_seasons(ts: np.ndarray, threshold: float = 0.3, min_gap: int =
 def compute_smoothness(ts: np.ndarray) -> float:
     """
     Smoothness = 1 / (std of second derivative).
-    Higher value = smoother curve (banana has a smooth, broad phenology).
+    Higher value = smoother curve.
     """
     valid = ts[~np.isnan(ts)]
     if len(valid) < 3:
@@ -412,7 +417,7 @@ class PhenologyExtractor:
     ) -> dict:
         """
         Compute temporal correlation between NDVI and VV SAR.
-        High correlation indicates vegetation-driven SAR response (banana canopy).
+        High correlation indicates vegetation-driven SAR response.
         """
         n_pixels = ndvi_arr.shape[0]
         correlations = np.full(n_pixels, np.nan, dtype=np.float32)

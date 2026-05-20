@@ -88,6 +88,22 @@ def ndre(re1: np.ndarray, red: np.ndarray) -> np.ndarray:
     return (re1 - red) / (re1 + red + _EPS)
 
 
+def ccci(nir: np.ndarray, re1: np.ndarray, ndre_min: float = 0.1,
+         ndre_max: float = 0.9) -> np.ndarray:
+    """
+    Canopy Chlorophyll Content Index (CCCI).
+
+    CCCI = (NDRE - NDRE_min) / (NDRE_max - NDRE_min)
+
+    Validated for cabbage nitrogen status assessment.
+    NDRE is better than NDVI for cabbage growth status.
+    Ref: Besand & Katroschan (2022), IHC 2022.
+    """
+    ndre_val = (nir - re1) / (nir + re1 + _EPS)
+    result = (ndre_val - ndre_min) / (ndre_max - ndre_min + _EPS)
+    return np.clip(result, 0.0, 1.0)
+
+
 def rvi_sar(vv: np.ndarray, vh: np.ndarray) -> np.ndarray:
     """
     Radar Vegetation Index (SAR).
@@ -156,7 +172,7 @@ class SpectralIndexCalculator:
     """
 
     # Indices to compute by default
-    DEFAULT_S2_INDICES = ["NDVI", "EVI", "NDWI", "LSWI", "SAVI", "MSAVI", "NBR", "NDRE"]
+    DEFAULT_S2_INDICES = ["NDVI", "EVI", "NDWI", "LSWI", "SAVI", "MSAVI", "NBR", "NDRE", "CCCI"]
     DEFAULT_S1_INDICES = ["RVI", "RFDI", "CR"]
 
     def __init__(
@@ -236,6 +252,7 @@ class SpectralIndexCalculator:
             "MSAVI": lambda: msavi(nir, red),
             "NBR": lambda: nbr(nir, swir2),
             "NDRE": lambda: ndre(re1, red),
+            "CCCI": lambda: ccci(nir, re1),
         }
 
         for idx_name in self.s2_indices:
@@ -296,6 +313,7 @@ class SpectralIndexCalculator:
             result["NBR"] = nbr(nir, swir2)
         if re1 is not None:
             result["NDRE"] = ndre(re1, red)
+            result["CCCI"] = ccci(nir, re1)
         if vv is not None and vh is not None:
             result["RVI"] = rvi_sar(vv, vh)
             result["RFDI"] = rfdi(vv, vh)

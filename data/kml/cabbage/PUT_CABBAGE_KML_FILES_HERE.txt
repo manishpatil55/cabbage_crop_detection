@@ -1,0 +1,5 @@
+Place cabbage KML polygon files here.
+Filename format: {plot_id}_{state}_{anchor_date}_{optional_variety}.kml
+Example: 01_WestBengal_15nov2024_GoldenAcre.kml
+
+Anchor date should be mid-to-late heading stage (45-80 days after transplant).

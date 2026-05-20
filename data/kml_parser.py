@@ -18,17 +18,17 @@ e.g. "1_3aug2023.kml", "12_15jan2024.kml", "plot5_20sep2023.kml".
 ``_extract_date_from_filename()`` parses these patterns and stores the result
 as ``anchor_date`` (a ``datetime.date``) in the GeoDataFrame.  The anchor date
 is then used by ``SampleGenerator`` to define the GEE download window:
-  start = anchor_date − 12 months
-  end   = anchor_date + 12 months
-This guarantees a full annual cycle of confirmed banana presence is captured.
+  start = anchor_date − 3 months
+  end   = anchor_date + 3 months
+This captures a full cabbage crop cycle (60-120 days) centred on the confirmed date.
 
 KML file location
 -----------------
 Place all your KML files in:
-    banana_detection/data/kml/
+    cabbage_detection/data/kml/
 
 Example:
-    banana_detection/
+    cabbage_detection/
     └── data/
         └── kml/
             ├── 1_3aug2023.kml
@@ -171,9 +171,9 @@ def _anchor_to_date_range(
     """
     Convert an anchor date to a (start_date, end_date) string pair.
 
-    Default window: 12 months before → 12 months after the anchor date.
-    This captures a full annual phenological cycle centred on the confirmed
-    banana presence date.
+    Default window: 3 months before → 3 months after the anchor date.
+    This captures the full cabbage lifecycle (60-120 days transplant to harvest)
+    centred on the confirmed presence date.
 
     Returns
     -------
@@ -386,12 +386,12 @@ class KMLParser:
       - area_ha     : Approximate area in hectares
       - anchor_date : Survey/confirmation date extracted from filename
                       (e.g. "1_3aug2023.kml" → 2023-08-03)
-      - date_start  : GEE download start = anchor_date − 12 months
-      - date_end    : GEE download end   = anchor_date + 12 months
+      - date_start  : GEE download start = anchor_date − 3 months
+      - date_end    : GEE download end   = anchor_date + 3 months
 
     KML file location
     -----------------
-    Place all KML files in:  banana_detection/data/kml/
+    Place all KML files in:  cabbage_detection/data/kml/
     """
 
     def __init__(self, months_before: int = 3, months_after: int = 3):
@@ -423,7 +423,7 @@ class KMLParser:
         ----------
         kml_path             : path to .kml or .kmz file
         state                : override state name; if None, inferred from filename
-        label                : class label (1 = banana, 0 = non-banana)
+        label                : class label (1 = cabbage, 0 = non-cabbage)
         anchor_date_override : manually supply anchor date (overrides filename parse)
 
         Returns
@@ -657,8 +657,8 @@ class KMLParser:
     @staticmethod
     def anchor_to_date_range(
         anchor: date,
-        months_before: int = 12,
-        months_after: int = 12,
+        months_before: int = 3,
+        months_after: int = 3,
     ) -> Tuple[str, str]:
         """
         Public wrapper around ``_anchor_to_date_range``.
