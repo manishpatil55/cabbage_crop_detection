@@ -53,26 +53,19 @@ The model does **NOT** use a seasonal calendar or assume any fixed planting wind
 
 ---
 
-## 3. Machine Learning Ensemble Design
+## 3. Machine Learning Model Selection
 
-We use a **Stacking Ensemble** to combine the strengths of different algorithmic paradigms:
+The training pipeline evaluates multiple algorithmic paradigms—**Random Forest**, **XGBoost**, and a **Stacking Ensemble** (which combines RF and XGBoost via Logistic Regression)—and dynamically selects the best performing model. 
 
-1. **Random Forest (Base Learner 1)**
-   - Excellent at handling the high dimensionality (80 features).
-   - Robust against outliers (e.g., occasional undetected cloud shadows).
-   - Lower variance, highly stable.
-
-2. **XGBoost (Base Learner 2)**
-   - Excellent at modeling non-linear interactions (e.g., the exact interplay between NDRE and CCCI during the 3rd composite month).
-   - Higher capacity for fine-grained discrimination between Cabbage and other Brassicas (like Cauliflower).
-
-3. **Logistic Regression (Meta-Learner)**
-   - Takes the probability outputs from RF and XGBoost and learns how to trust them.
-   - Outputs a smoothly calibrated final probability.
+For the current season-agnostic dataset, the **Random Forest** model outperformed the ensemble.
+- Excellent at handling the high dimensionality (80 features).
+- Robust against outliers (e.g., occasional undetected cloud shadows).
+- Lower variance, highly stable across different crop dates.
+- Handles the relative `_early_` and `_late_` temporal split features exceptionally well.
 
 ### 3.1 Threshold Calibration
 By default, models use a 0.5 probability cutoff. However, agricultural detection often has class imbalances.
-During training, the pipeline uses **Youden's J statistic** and **F1-score maximization** on the Precision-Recall curve to find the mathematically optimal decision boundary. For this dataset, the optimal threshold was dynamically calibrated to **0.400**, yielding a final F1-Score of **93.9%**.
+During training, the pipeline uses **Youden's J statistic** and **F1-score maximization** on the Precision-Recall curve to find the mathematically optimal decision boundary. For this dataset, the optimal threshold was dynamically calibrated to **0.340**, yielding a final F1-Score of **92.5%** and an accuracy of **93.7%**.
 
 ---
 

@@ -2,14 +2,14 @@
 
 ## Pan-India Cabbage Detection from Satellite Imagery
 
-A production-grade machine learning pipeline that detects **cabbage (Brassica oleracea var. capitata)** crops from satellite imagery across India using a **Stacking Ensemble** of Random Forest + XGBoost with Sentinel-1 (SAR) and Sentinel-2 (optical) data fusion.
+A production-grade machine learning pipeline that detects **cabbage (Brassica oleracea var. capitata)** crops from satellite imagery across India using a **Random Forest** algorithm with Sentinel-1 (SAR) and Sentinel-2 (optical) data fusion.
 
 ---
 
 ## 🏗️ Architecture
 
 ```
-KML Polygon → GEE Download → Spectral Indices → Temporal Stats → Heading Phenology → Stacking Ensemble → Classification
+KML Polygon → GEE Download → Spectral Indices → Temporal Stats → Heading Phenology → Random Forest Classifier → Classification
                   ↓                  ↓                 ↓               ↓
           Sentinel-1 (SAR)    12 indices         Monthly stats      10 BBCH heading
           Sentinel-2 (Opt)    (NDVI, NDRE,       per band           features per VI
@@ -22,7 +22,6 @@ KML Polygon → GEE Download → Spectral Indices → Temporal Stats → Heading
 - **12 Spectral Indices**: NDVI, EVI, NDWI, LSWI, SAVI, MSAVI, NBR, NDRE, **CCCI**, RVI, RFDI, CR
 - **BBCH Heading Phenology**: Features tailored for heading vegetables (Stage 4: head formation)
 - **Monthly Compositing**: ±3 month window captures cabbage's full lifecycle + cloud buffer
-- **State-Aware Calendar**: India-specific seasonal windows for 5 agro-climatic zones
 - **Spatial Cross-Validation**: GroupShuffleSplit by plot_id prevents spatial data leakage
 
 ---
@@ -193,7 +192,7 @@ The user provides a single **`crop_date`** — the date they confirmed cabbage i
   "mean_probability": 0.7823,
   "cloud_free_percentage": 95.0,
   "data_quality": "EXCELLENT",
-  "model_name": "Stacking Ensemble (Random Forest + XGBoost)",
+  "model_name": "Random Forest",
   "satellites_used": "Sentinel-1 (SAR) + Sentinel-2 (Optical)"
 }
 ```
@@ -210,7 +209,7 @@ Key settings in `config.yaml`:
 | `months_before/after` | 3 | ±3 months captures full lifecycle + cloud buffer for pan-India |
 | `buffer_m` | 250 | Sized for fragmented 0.1-1 ha fields |
 | `minimum_field_area_ha` | 0.10 | 10 Sentinel pixels minimum |
-| `probability_threshold` | 0.200 | Calibrated after training (Youden/F1 optimal) |
+| `probability_threshold` | 0.340 | Calibrated after training (Youden/F1 optimal) |
 | `key_indices` | NDVI, NDRE, EVI, LSWI, CCCI | Red-edge emphasis for heading vegetables |
 | `function_set` | heading_vegetable | BBCH-scale phenology features |
 

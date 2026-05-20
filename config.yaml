@@ -112,7 +112,7 @@ models:
 
 inference:
   output_format: "geotiff"
-  probability_threshold: 0.200   # Calibrated after training (Youden/F1 optimal)
+  probability_threshold: 0.340   # Calibrated after training (Youden/F1 optimal)
   min_patch_size_m2: 100
   months_before: 3               # ±3 months for inference (handles cloud gaps across India)
   months_after: 3
